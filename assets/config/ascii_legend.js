@@ -18,10 +18,11 @@
   // Caracteres descartados: 'D' (puerta antigua), variaciones de pacientes/loot sin
   // normalizar. Los mapas debug y generador usan únicamente los símbolos oficiales.
 
+  // Tintes muy saturados para que destaquen incluso con la iluminación y la niebla.
   const TINT_COLORS = {
-    blue: 0x6bd3ff,
-    green: 0x6bff8a,
-    red: 0xff6b6b
+    blue: 0x4dbdff,
+    green: 0x4dff88,
+    red: 0xff4d4d
   };
 
   const LEGEND = {

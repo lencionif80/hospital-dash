@@ -809,11 +809,13 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
  // === Parser ASCII → grid de colisiones (sin instanciar entidades) ===
 
   // Tinte de suelo por tipo de sala (control/boss/miniboss/normal).
+  // Nota: reforzamos el color base y añadimos una segunda pasada "screen" para que
+  // los suelos especiales destaquen incluso bajo la viñeta de luz/niebla.
   const FLOOR_SHADES = {
-    control: 'rgba(88, 140, 235, 0.30)',
-    boss: 'rgba(220, 78, 78, 0.32)',
-    miniboss: 'rgba(84, 184, 132, 0.28)',
-    normal: 'rgba(214, 214, 214, 0.08)'
+    control: { base: 'rgba(64, 140, 255, 0.58)', overlay: 'rgba(90, 175, 255, 0.42)', overlayMode: 'screen', tileAlpha: 0.8 },
+    boss: { base: 'rgba(235, 72, 72, 0.60)', overlay: 'rgba(255, 125, 110, 0.42)', overlayMode: 'screen', tileAlpha: 0.82 },
+    miniboss: { base: 'rgba(74, 200, 132, 0.56)', overlay: 'rgba(124, 255, 184, 0.40)', overlayMode: 'screen', tileAlpha: 0.8 },
+    normal: { base: 'rgba(214, 214, 214, 0.08)', overlay: null, overlayMode: 'source-over', tileAlpha: 1 }
   };
 
   function normalizeRoomType(room, fallback){
@@ -863,6 +865,14 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
       case 'normal': return FLOOR_SHADES.normal;
       default: return FLOOR_SHADES.normal;
     }
+  }
+
+  function normalizeFloorVisual(visual, fallbackColor){
+    if (!visual && !fallbackColor) return null;
+    if (visual && typeof visual === 'object') {
+      return { ...visual, base: visual.base || fallbackColor || null };
+    }
+    return { base: visual || fallbackColor || null, overlay: null, overlayMode: 'source-over', tileAlpha: visual ? 0.82 : 1 };
   }
 
 
@@ -975,8 +985,8 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
         row.push(blocking ? 1 : 0);
         const roomType = roomTypeGrid ? roomTypeGrid[y]?.[x] : null;
         // Color del suelo según la sala a la que pertenece el tile (MapGen: control/boss/miniboss/normal).
-        const shade = getFloorShadeForRoomType(roomType) || def?.color || null;
-        colorRow.push(shade);
+        const visual = normalizeFloorVisual(getFloorShadeForRoomType(roomType), def?.color);
+        colorRow.push(visual);
 
         if (!def) continue;
         if (def.kind === 'wall' || def.kind === 'void') continue;

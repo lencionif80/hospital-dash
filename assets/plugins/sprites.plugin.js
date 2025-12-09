@@ -198,8 +198,14 @@
             img ? ctx.drawImage(img, px, py, tile, tile) : (ctx.fillStyle='#5d4037', ctx.fillRect(px,py,tile,tile));
           } else {
             const shade = Array.isArray(G.floorColors) ? (G.floorColors[y]?.[x] || null) : null;
-            if (shade) {
-              ctx.fillStyle = shade;
+            const baseShade = (shade && typeof shade === 'object') ? shade.base : shade;
+            const overlay = (shade && typeof shade === 'object') ? shade.overlay : null;
+            const overlayMode = (shade && typeof shade === 'object') ? (shade.overlayMode || 'screen') : 'screen';
+            const tileAlpha = (shade && typeof shade === 'object' && typeof shade.tileAlpha === 'number')
+              ? shade.tileAlpha
+              : (baseShade ? 0.86 : 1);
+            if (baseShade) {
+              ctx.fillStyle = baseShade;
               ctx.fillRect(px, py, tile, tile);
             }
             // ajedrez (clarito/normal)
@@ -207,12 +213,22 @@
             const img = useLight ? (this._imgs['suelo_claro'] || this._imgs['suelo'])
                                  : (this._imgs['suelo_oscuro'] || this._imgs['suelo']);
             if (img) {
-              if (shade) ctx.globalAlpha = 0.82;
+              if (tileAlpha < 1) ctx.globalAlpha = tileAlpha;
               ctx.drawImage(img, px, py, tile, tile);
-              if (shade) ctx.globalAlpha = 1;
+              if (tileAlpha < 1) ctx.globalAlpha = 1;
             } else {
               ctx.fillStyle='#37474f';
               ctx.fillRect(px,py,tile,tile);
+            }
+            // Overlay final encima del shading y del ajedrez para que el color se lea con niebla/luz.
+            if (overlay) {
+              const overlayAlpha = typeof shade.overlayAlpha === 'number' ? shade.overlayAlpha : 1;
+              ctx.globalCompositeOperation = overlayMode || 'screen';
+              ctx.globalAlpha = overlayAlpha;
+              ctx.fillStyle = overlay;
+              ctx.fillRect(px, py, tile, tile);
+              ctx.globalAlpha = 1;
+              ctx.globalCompositeOperation = 'source-over';
             }
           }
         }
