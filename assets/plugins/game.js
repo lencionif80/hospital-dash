@@ -1990,6 +1990,9 @@ function drawEntities(c2){
     return e;
   }
 
+  window.createSpawnDebugPlaceholderEntity =
+    window.createSpawnDebugPlaceholderEntity || createSpawnDebugPlaceholderEntity;
+
   // === Post-parse: instanciar placements SOLO UNA VEZ ===
   function finalizeLevelBuildOnce(){
     if (G._placementsFinalized) return;          // evita duplicados
