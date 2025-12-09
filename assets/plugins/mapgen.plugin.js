@@ -1245,6 +1245,7 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       areas: {
         control: asciiRows._control || null,
         boss: asciiRows._boss || null,
+        miniboss: asciiRows._miniboss || null,
         rooms: allRooms
       },
       grid: asciiRows,

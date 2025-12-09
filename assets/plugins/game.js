@@ -744,9 +744,64 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
 // Función NUCLEO - Parseo mapa + colocación base (may/min OK, sin duplicar con placements)
 // -------------------------------------------------------------------------------------------
 
-
  // === Parser ASCII → grid de colisiones (sin instanciar entidades) ===
 
+  // Tinte de suelo por tipo de sala (control/boss/miniboss/normal).
+  const FLOOR_SHADES = {
+    control: 'rgba(88, 140, 235, 0.30)',
+    boss: 'rgba(220, 78, 78, 0.32)',
+    miniboss: 'rgba(84, 184, 132, 0.28)',
+    normal: 'rgba(214, 214, 214, 0.08)'
+  };
+
+  function normalizeRoomType(room, fallback){
+    const t = typeof room === 'string' ? room : room?.type;
+    const key = (t || fallback || '').toLowerCase();
+    if (!key) return null;
+    if (key === 'mini-boss' || key === 'mini_boss') return 'miniboss';
+    if (key === 'boss' || key === 'miniboss' || key === 'control' || key === 'normal') return key;
+    return fallback || 'normal';
+  }
+
+  function buildRoomTypeGrid(areas, width, height){
+    if (!areas || !width || !height) return null;
+    const grid = Array.from({ length: height }, () => Array(width).fill(null));
+    const applyRoom = (room, fallbackType) => {
+      if (!room || typeof room.x !== 'number' || typeof room.y !== 'number') return;
+      const type = normalizeRoomType(room, fallbackType);
+      if (!type) return;
+      const rx = Math.max(0, room.x | 0);
+      const ry = Math.max(0, room.y | 0);
+      const rw = Math.max(1, room.w | 0);
+      const rh = Math.max(1, room.h | 0);
+      for (let y = ry; y < Math.min(height, ry + rh); y++) {
+        const row = grid[y];
+        for (let x = rx; x < Math.min(width, rx + rw); x++) {
+          row[x] = type;
+        }
+      }
+    };
+
+    const rooms = Array.isArray(areas.rooms) ? areas.rooms : [];
+    for (const r of rooms) applyRoom(r, r?.type);
+    applyRoom(areas.control, 'control');
+    applyRoom(areas.boss, 'boss');
+    applyRoom(areas.miniboss, 'miniboss');
+
+    return grid;
+  }
+
+  function getFloorShadeForRoomType(roomType){
+    const key = (roomType || '').toLowerCase();
+    if (!key) return null;
+    switch (key) {
+      case 'control': return FLOOR_SHADES.control;
+      case 'boss': return FLOOR_SHADES.boss;
+      case 'miniboss': return FLOOR_SHADES.miniboss;
+      case 'normal': return FLOOR_SHADES.normal;
+      default: return FLOOR_SHADES.normal;
+    }
+  }
 
 
   function parseMap(lines){
@@ -774,6 +829,8 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
       }
       return def;
     });
+
+    let roomTypeGrid = null;
 
     const ENTITY_FACTORIES = {
       hero_spawn(tx, ty) {
@@ -836,6 +893,7 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
     // === Tamaño y buffer de mapa ===
     G.mapH = lines.length;
     G.mapW = lines[0].length;
+    roomTypeGrid = buildRoomTypeGrid(G.mapAreas, G.mapW, G.mapH);
     G.map = [];
     G.floorColors = [];
 
@@ -853,7 +911,10 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
         const def = getAsciiDef(ch, { context: 'parseMap' });
         const blocking = def?.blocking === true || ch === '#';
         row.push(blocking ? 1 : 0);
-        colorRow.push(def?.color || null);
+        const roomType = roomTypeGrid ? roomTypeGrid[y]?.[x] : null;
+        // Color del suelo según la sala a la que pertenece el tile (MapGen: control/boss/miniboss/normal).
+        const shade = getFloorShadeForRoomType(roomType) || def?.color || null;
+        colorRow.push(shade);
 
         if (!def) continue;
         if (def.kind === 'wall' || def.kind === 'void') continue;
