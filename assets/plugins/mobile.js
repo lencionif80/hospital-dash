@@ -25,6 +25,10 @@
   const BASE_WIDTH = canvas ? canvas.width : 960;
   const BASE_HEIGHT = canvas ? canvas.height : 540;
 
+  function clamp(v, a, b) {
+    return Math.max(a, Math.min(b, v));
+  }
+
   // ------------------------------------------------------
   // Utilidades de viewport y estilos base
   // ------------------------------------------------------
@@ -110,6 +114,7 @@
 
     const forward = (type, evt) => {
       if (!w.MouseNav || !w.MouseNav._canvas) return;
+      if (evt.touches && evt.touches.length > 1) return; // no invadir el pinch-zoom
       const touch = evt.touches && evt.touches[0];
       if (!touch) return;
       const synthetic = {
@@ -134,6 +139,109 @@
       evt.preventDefault();
       forward('move', evt);
     });
+  }
+
+  // ------------------------------------------------------
+  // Pinch-zoom sobre el canvas (usa la cámara del juego)
+  // ------------------------------------------------------
+  function setupPinchZoom() {
+    if (!canvas) return;
+
+    const state = {
+      active: false,
+      startDistance: 0,
+      baseZoom: 1,
+      focusWorld: null,
+      focusScreen: null,
+    };
+
+    const getCamera = () => w.camera;
+    const isInGame = () => w.G?.state === 'PLAYING';
+
+    const toCanvasPoint = (touch) => {
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      return {
+        x: (touch.clientX - rect.left) * scaleX,
+        y: (touch.clientY - rect.top) * scaleY,
+      };
+    };
+
+    const screenToWorld = (pt, cam) => {
+      const zoom = cam?.zoom || 1;
+      return {
+        x: (pt.x - canvas.width * 0.5) / zoom + (cam?.x || 0),
+        y: (pt.y - canvas.height * 0.5) / zoom + (cam?.y || 0),
+      };
+    };
+
+    function applyZoomFromPinch(factor) {
+      const cam = getCamera();
+      if (!cam) return;
+      const min = cam.minZoom || 0.1;
+      const max = cam.maxZoom || 3.0;
+      // factor = D1 / D0 (distancia actual entre dedos / distancia inicial)
+      const targetZoom = clamp((state.baseZoom || cam.zoom || 1) * factor, min, max);
+
+      // Ajusta la posición de cámara para que el punto medio del gesto permanezca en foco.
+      if (state.focusWorld && w.G?.player) {
+        const player = w.G.player;
+        const baseX = player.x + player.w * 0.5;
+        const baseY = player.y + player.h * 0.5;
+        const desiredCamX = state.focusWorld.x - (state.focusScreen.x - canvas.width * 0.5) / targetZoom;
+        const desiredCamY = state.focusWorld.y - (state.focusScreen.y - canvas.height * 0.5) / targetZoom;
+        cam.offsetX = desiredCamX - baseX;
+        cam.offsetY = desiredCamY - baseY;
+      }
+
+      if (typeof w.setCameraZoom === 'function') {
+        w.setCameraZoom(targetZoom);
+      } else {
+        cam.zoom = targetZoom;
+      }
+    }
+
+    function handleStart(evt) {
+      if (!isInGame() || !(evt.touches?.length === 2)) return;
+      const [t0, t1] = evt.touches;
+      const p0 = toCanvasPoint(t0);
+      const p1 = toCanvasPoint(t1);
+      state.startDistance = Math.hypot(p1.x - p0.x, p1.y - p0.y) || 1;
+      state.baseZoom = getCamera()?.zoomTarget || getCamera()?.zoom || 1;
+      state.focusScreen = { x: (p0.x + p1.x) * 0.5, y: (p0.y + p1.y) * 0.5 };
+      state.focusWorld = screenToWorld(state.focusScreen, getCamera());
+      state.active = true;
+      evt.preventDefault();
+    }
+
+    function handleMove(evt) {
+      if (!(evt.touches?.length === 2)) { state.active = false; return; }
+      if (!state.active) {
+        handleStart(evt);
+        return;
+      }
+      const [t0, t1] = evt.touches;
+      const p0 = toCanvasPoint(t0);
+      const p1 = toCanvasPoint(t1);
+      const dist = Math.hypot(p1.x - p0.x, p1.y - p0.y) || state.startDistance;
+      if (state.startDistance > 0) {
+        applyZoomFromPinch(dist / state.startDistance);
+      }
+      evt.preventDefault();
+    }
+
+    function handleEnd(evt) {
+      if (!evt.touches || evt.touches.length < 2) {
+        state.active = false;
+        state.startDistance = 0;
+      }
+    }
+
+    canvas.addEventListener('touchstart', handleStart, { passive: false });
+    canvas.addEventListener('touchmove', handleMove, { passive: false });
+    canvas.addEventListener('touchend', handleEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleEnd, { passive: false });
   }
 
   // ------------------------------------------------------
@@ -261,6 +369,7 @@
 
     patchMouseNavCoordinates();
     bindTouchToMouseNav();
+    setupPinchZoom();
     bindFullscreenButton();
 
     showLoading();
