@@ -3,7 +3,10 @@
 <html lang="es">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+  />
   <title>Il Divo: Hospital Dash!</title>
   <link rel="stylesheet" href="style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 32 32%27><rect width=%2732%27 height=%2732%27 fill=%27%230d1117%27/><text x=%2750%25%27 y=%2756%25%27 dominant-baseline=%27middle%27 text-anchor=%27middle%27 font-family=%27Arial%27 font-size=%2720%27 fill=%27%23fff%27>HD</text></svg>">
@@ -19,11 +22,21 @@
   </script>
 </head>
 <body class="intro-playing">
+  <div id="loading-screen" aria-live="polite" role="status">
+    <div id="loading-text">Cargando...</div>
+    <div id="loading-bar-container" aria-label="Progreso de carga">
+      <div id="loading-bar"></div>
+    </div>
+  </div>
+
   <div id="game-container" aria-label="Contenedor del juego">
     <!-- Lienzo principal que dibuja TODO el juego -->
     <canvas id="gameCanvas" width="960" height="540" aria-label="Lienzo del juego"></canvas>
     <canvas id="fogCanvas"></canvas>
     <canvas id="hudCanvas"></canvas>
+    <button id="btn-fullscreen" type="button" class="floating-btn" aria-label="Activar pantalla completa">
+      Pantalla completa
+    </button>
 
     <!-- START -->
     <div id="start-screen" class="overlay hidden">
@@ -280,6 +293,6 @@ window.addEventListener('intro:complete', () => {
   document.body.classList.remove('intro-playing');
 });
 </script>
-<script src="assets/plugins/mobile_layout.js"></script>
+<script src="assets/plugins/mobile.js"></script>
 </body>
 </html>
