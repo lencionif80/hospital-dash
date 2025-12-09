@@ -126,6 +126,12 @@ body {
   overflow: hidden;
 }
 
+body.mobile-ready {
+  display: block;
+  width: 100vw;
+  height: 100vh;
+}
+
 /* Contenedor del juego con toque arcade (bisel + scanlines suaves) */
 #game-container{
   position: relative;           /* crea un contexto de apilado propio */
@@ -134,6 +140,16 @@ body {
   margin: 0 auto;
   overflow: hidden;
   background: #0b0d10;
+}
+
+body.mobile-ready #game-container {
+  width: 100vw;
+  height: 100vh;
+}
+
+body.is-loading #game-container {
+  opacity: 0;
+  pointer-events: none;
 }
 
 #game-container canvas { display:block; }
@@ -158,6 +174,59 @@ canvas {
   height: 100%;
   image-rendering: pixelated;
 }
+
+#loading-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: #000;
+  color: #fff;
+  z-index: 9999;
+  font-family: 'Press Start 2P', system-ui, sans-serif;
+  gap: 12px;
+}
+
+#loading-screen.hidden {
+  display: none;
+}
+
+#loading-bar-container {
+  width: 80%;
+  max-width: 420px;
+  height: 10px;
+  border: 1px solid #fff;
+}
+
+#loading-bar {
+  height: 100%;
+  width: 0%;
+  background: #fff;
+  transition: width 0.15s ease;
+}
+
+.floating-btn {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  background: var(--button-bg);
+  color: #fff;
+  border: none;
+  padding: 10px 12px;
+  font-family: 'Press Start 2P', system-ui, sans-serif;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.35);
+  cursor: pointer;
+}
+
+.floating-btn:active { transform: translateY(1px); }
+
+.floating-btn.hidden { display: none; }
 
 /* SOLO el lienzo del juego pinta el suelo */
 #gameCanvas {
