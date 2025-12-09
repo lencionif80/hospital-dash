@@ -338,7 +338,20 @@
   const metrics = document.getElementById('metricsOverlay') || document.createElement('pre'); // por si no existe
 
   // Cámara
-  const camera = { x: 0, y: 0, zoom: 0.45 }; // ⬅️ arranca ya alejado
+  const CAMERA_DEFAULT_ZOOM = 0.45;
+  const CAMERA_MIN_ZOOM = 0.1;
+  const CAMERA_MAX_ZOOM = 3.0;
+  const camera = {
+    x: 0,
+    y: 0,
+    zoom: CAMERA_DEFAULT_ZOOM,
+    zoomTarget: CAMERA_DEFAULT_ZOOM,
+    offsetX: 0,
+    offsetY: 0,
+    minZoom: CAMERA_MIN_ZOOM,
+    maxZoom: CAMERA_MAX_ZOOM,
+    defaultZoom: CAMERA_DEFAULT_ZOOM,
+  }; // ⬅️ arranca ya alejado
 
   // RNG simple (semilla fija por demo)
   function mulberry32(a){return function(){var t=a+=0x6D2B79F5;t=Math.imul(t^t>>>15,t|1);t^=t+Math.imul(t^t>>>7,t|61);return((t^t>>>14)>>>0)/4294967296}}
@@ -379,7 +392,7 @@ function __onKeyDown__(e){
 
     // === Atajos comunes ===
     if (k === '0'){ e.preventDefault(); fitCameraToMap(); }
-    if (k === 'q'){ window.camera.zoom = clamp(window.camera.zoom - 0.1, 0.6, 2.5); }
+    if (k === 'q'){ addCameraZoom(-0.1); }
     if (k === 'r'){
       if (G.state === 'GAMEOVER' || G.state === 'COMPLETE'){
         e.preventDefault();
@@ -387,7 +400,7 @@ function __onKeyDown__(e){
         catch(_){ startGame(); }
         return;
       }else{
-        window.camera.zoom = clamp(window.camera.zoom + 0.1, 0.6, 2.5);
+        addCameraZoom(0.1);
       }
     }
     if (k === 'f1'){ e.preventDefault(); metrics.style.display = (metrics.style.display === 'none' ? 'block' : 'none'); }
@@ -432,19 +445,35 @@ document.addEventListener('keydown', (e)=>{
   window.addEventListener('blur', () => {
     for (const key in keys) keys[key] = false;
   });
-  
+
+  function setCameraZoom(z, immediate = false){
+    const zc = clamp(z, CAMERA_MIN_ZOOM, CAMERA_MAX_ZOOM);
+    camera.zoomTarget = zc;
+    if (immediate) camera.zoom = zc;
+  }
+
+  function addCameraZoom(dz){
+    setCameraZoom(camera.zoomTarget + dz);
+  }
+
+  function resetCameraView(){
+    camera.offsetX = 0;
+    camera.offsetY = 0;
+    setCameraZoom(CAMERA_DEFAULT_ZOOM, true);
+  }
+
   canvas.addEventListener('wheel', (e) => {
     e.preventDefault();
     const dz = e.deltaY > 0 ? -0.1 : 0.1;
-    camera.zoom = clamp(camera.zoom + dz, 0.25, 3.0);
+    addCameraZoom(dz);
   }, { passive: false });
 
   function fitCameraToMap(padding = 0.95){
     const W = G.mapW * TILE, H = G.mapH * TILE;
     if (!W || !H) return;
     const zx = VIEW_W / W, zy = VIEW_H / H;
-    camera.zoom = Math.max(0.1, Math.min(zx, zy) * padding);
-    camera.x = W * 0.5; 
+    setCameraZoom(Math.max(0.1, Math.min(zx, zy) * padding), true);
+    camera.x = W * 0.5;
     camera.y = H * 0.5;
   }
 
@@ -1597,6 +1626,12 @@ function updateEntities(dt){
   // Update principal
   // ------------------------------------------------------------
   function update(dt){
+    const zoomDiff = camera.zoomTarget - camera.zoom;
+    if (Math.abs(zoomDiff) > 0.0001) {
+      // Suaviza el zoom para que los gestos/pulsaciones no salten brusco.
+      camera.zoom += zoomDiff * Math.min(1, dt * 12);
+    }
+
     window.SkyFX?.update?.(dt);
     try { window.ArrowGuide?.update?.(dt); } catch(e){}
     try { window.Narrator?.update?.(dt, G); } catch(e){}
@@ -1850,8 +1885,10 @@ function drawEntities(c2){
   function draw(){
     // actualizar cámara centrada en jugador
     if (G.player){
-      camera.x = G.player.x + G.player.w/2;
-      camera.y = G.player.y + G.player.h/2;
+      const baseX = G.player.x + G.player.w/2;
+      const baseY = G.player.y + G.player.h/2;
+      camera.x = baseX + (camera.offsetX || 0);
+      camera.y = baseY + (camera.offsetY || 0);
     }
 
     // composición: mundo borroso fuera de luz + mundo nítido en cono
@@ -2687,6 +2724,7 @@ function drawEntities(c2){
   // ------------------------------------------------------------
   async function startGame(){
     G.state = 'PLAYING';
+    resetCameraView();
     try { window.MusicManager?.stopMenu?.({ fadeTime: 0.25 }); } catch (_) {}
     // si hay minimapa de debug, muéstralo ahora (no en el menú)
     window.__toggleMinimap?.(!!window.DEBUG_MINIMAP);
@@ -2866,6 +2904,9 @@ function drawEntities(c2){
   window.ENT = ENT;                 // para plugins/sprites
   window.G = G;
   window.camera = camera;
+  window.setCameraZoom = setCameraZoom;
+  window.addCameraZoom = addCameraZoom;
+  window.resetCameraView = resetCameraView;
   window.damagePlayer = damagePlayer; // ⬅️ EXponer daño del héroe para las ratas
   })();
 // ==== DEBUG MINI-MAP OVERLAY =================================================
