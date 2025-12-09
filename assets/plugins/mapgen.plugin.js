@@ -1210,6 +1210,8 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       }
     }
     const floorPercent = totalTiles > 0 ? (walkableTiles / totalTiles) * 100 : 0;
+    const occupancyTarget = Number(levelConfig.mapOccupancyRatio ?? levelConfig.map_occupancy_ratio ?? levelConfig.mapOccupancy ?? asciiRows._occupancyTarget ?? 0.9) || 0.9;
+    const occupancyAchieved = asciiRows._occupancy?.ratio ?? (walkableTiles / Math.max(1, totalTiles));
     const roomsRequested = Number.isFinite(levelConfig.rooms) ? levelConfig.rooms : (asciiRows._roomsRequested ?? allRooms.length);
     const roomsGenerated = Array.isArray(allRooms) ? allRooms.length : 0;
     const corridorsBuilt = Number(asciiRows._corridors || 0);
@@ -1231,6 +1233,8 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       totalTiles,
       walkableTiles,
       floorPercent,
+      occupancyTarget,
+      occupancyAchieved,
       mode
     };
 
@@ -1265,6 +1269,7 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       G.mapAscii = asciiRows;
       G.mapRooms = allRooms;
       G.mapAreas = result.areas;
+      // Cámara y colisión leen estos bounds/tamaños; se mantienen coherentes tras los cambios de densidad/conexiones
       G.levelRules = levelConfig;
       G.levelMeta = result.meta;
       G.mapGenerationMeta = generation;
@@ -1437,6 +1442,46 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
     return x >= room.x && x < room.x + room.w && y >= room.y && y < room.y + room.h;
   }
 
+  function createRoomGraph(rooms){
+    const g = new Map();
+    rooms.forEach((r)=>g.set(r, new Set()));
+    return g;
+  }
+
+  function linkRooms(graph, a, b){
+    if (!graph) return;
+    if (!graph.has(a)) graph.set(a, new Set());
+    if (!graph.has(b)) graph.set(b, new Set());
+    graph.get(a).add(b);
+    graph.get(b).add(a);
+  }
+
+  function isRoomReachable(graph, start, target, skip){
+    if (!graph || !start || !target) return false;
+    const visited = new Set();
+    const q = [start];
+    while (q.length){
+      const r = q.shift();
+      if (!r || r === skip || visited.has(r)) continue;
+      if (r === target) return true;
+      visited.add(r);
+      const next = graph.get(r) || new Set();
+      for (const n of next){
+        if (n === skip || visited.has(n)) continue;
+        q.push(n);
+      }
+    }
+    return false;
+  }
+
+  function bossPathMandatory(graph, control, miniboss, boss){
+    if (!graph || !control || !miniboss || !boss) return false;
+    // 1) Debe haber un camino control→boss
+    if (!isRoomReachable(graph, control, boss, null)) return false;
+    // 2) Si quitamos mini-boss, el boss debe quedar aislado del inicio
+    return !isRoomReachable(graph, control, boss, miniboss);
+  }
+
   function paintCorridorStripe(ascii, x, y, width, orientation, protectedRooms, cs){
     const offset = Math.floor(width / 2);
     const floorChar = '.';
@@ -1499,16 +1544,18 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
     return { y: room.y, x, outX: x, outY: Math.max(1, room.y - 1) };
   }
 
-  function ensureRoomsConnected(ascii, rooms, control, corridorWidth, rng, cs){
+  function ensureRoomsConnected(ascii, rooms, control, corridorWidth, rng, cs, graph, avoidRooms){
     const start = findRoomWalkableTile(ascii, control, cs) || { x: control.centerX|0, y: control.centerY|0 };
     let reachable = floodAscii(ascii, start.x, start.y, cs);
 
     const roomReachable = (room)=> reachable[room.centerY]?.[room.centerX];
 
+    const skipSet = avoidRooms instanceof Set ? avoidRooms : new Set();
+
     let safety = rooms.length * 2;
     while (rooms.some(r=>!roomReachable(r)) && safety-- > 0){
-      const reachableRooms = rooms.filter(roomReachable);
-      const unreachable = rooms.filter(r=>!roomReachable(r));
+      const reachableRooms = rooms.filter(r=>roomReachable(r) && !skipSet.has(r));
+      const unreachable = rooms.filter(r=>!roomReachable(r) && !skipSet.has(r));
       if (!reachableRooms.length || !unreachable.length) break;
 
       const target = unreachable[0];
@@ -1522,14 +1569,14 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       }
       if (!best) break;
 
-      connectRoomPair(ascii, best, target, corridorWidth, rng, cs, rooms);
+      connectRoomPair(ascii, best, target, corridorWidth, rng, cs, rooms, graph);
       reachable = floodAscii(ascii, start.x, start.y, cs);
     }
 
     return reachable;
   }
 
-  function connectRoomPair(ascii, roomA, roomB, corridorWidth, rng, cs, allRooms){
+  function connectRoomPair(ascii, roomA, roomB, corridorWidth, rng, cs, allRooms, graph){
     const centerA = { x: roomA.centerX, y: roomA.centerY };
     const centerB = { x: roomB.centerX, y: roomB.centerY };
     const doorA = pickDoorPosition(roomA, centerB, ascii[0].length, ascii.length);
@@ -1541,10 +1588,13 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
     const protectedRooms = Array.isArray(allRooms) ? allRooms : [roomA, roomB];
     carveCorridor(ascii, { x: doorA.outX, y: doorA.outY }, { x: doorB.outX, y: doorB.outY }, corridorWidth, rng, cs, protectedRooms);
     ascii._corridors = (ascii._corridors || 0) + 1;
+    linkRooms(graph, roomA, roomB);
   }
 
-  function connectRoomsWithMST(ascii, rooms, corridorWidth, rng, cs){
+  function connectRoomsWithMST(ascii, rooms, corridorWidth, rng, cs, opts){
     if (!rooms.length) return;
+    const { graph=null, avoid=null } = opts || {};
+    const avoidSet = avoid instanceof Set ? avoid : new Set();
     const connected = [rooms[0]];
     const remaining = rooms.slice(1);
     while (remaining.length){
@@ -1552,6 +1602,7 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       let bestDist = Infinity;
       for (const r of remaining){
         for (const c of connected){
+          if (avoidSet.has(r) || avoidSet.has(c)) continue;
           const dx = r.centerX - c.centerX;
           const dy = r.centerY - c.centerY;
           const d2 = dx*dx + dy*dy;
@@ -1559,10 +1610,90 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
         }
       }
       if (!bestPair) break;
-      connectRoomPair(ascii, bestPair.from, bestPair.to, corridorWidth, rng, cs, rooms);
+      connectRoomPair(ascii, bestPair.from, bestPair.to, corridorWidth, rng, cs, rooms, graph);
       connected.push(bestPair.to);
       remaining.splice(remaining.indexOf(bestPair.to), 1);
     }
+  }
+
+  function computeOccupancy(ascii, cs){
+    const H = ascii.length;
+    const W = ascii[0]?.length || 0;
+    let walkable = 0;
+    for (let y=0; y<H; y++){
+      for (let x=0; x<W; x++){
+        if (isWalkableChar(ascii[y][x], cs)) walkable++;
+      }
+    }
+    const total = H * W;
+    return { walkable, total, ratio: total > 0 ? walkable / total : 0 };
+  }
+
+  function rectToBlockRect(room, padding=0){
+    if (!room) return null;
+    return {
+      x1: room.x + padding,
+      y1: room.y + padding,
+      x2: room.x + room.w - 1 - padding,
+      y2: room.y + room.h - 1 - padding
+    };
+  }
+
+  function findNearestWalkable(ascii, origin, cs, maxRadius=36){
+    for (let r=0; r<=maxRadius; r++){
+      for (let dy=-r; dy<=r; dy++){
+        for (let dx=-r; dx<=r; dx++){
+          const x = origin.x + dx;
+          const y = origin.y + dy;
+          if (x<1 || y<1 || y>=ascii.length-1 || x>=ascii[0].length-1) continue;
+          if (isWalkableChar(ascii[y][x], cs)) return { x, y };
+        }
+      }
+    }
+    return null;
+  }
+
+  function densifyMap(ascii, rooms, targetRatio, corridorWidth, rng, cs){
+    const safeTarget = clamp(targetRatio || 0.9, 0.3, 0.98);
+    let { ratio } = computeOccupancy(ascii, cs);
+    if (ratio >= safeTarget) return;
+
+    const H = ascii.length;
+    const W = ascii[0].length;
+    const boss = rooms.find(r=>r.type==='boss') || null;
+    const bossBuffer = boss ? expand(boss, 3) : null;
+    const maxAttempts = 28;
+    let attempts = 0;
+
+    while (ratio < safeTarget && attempts++ < maxAttempts){
+      const rw = randInt(rng, 6, 12);
+      const rh = randInt(rng, 5, 10);
+      const rx = randInt(rng, 2, Math.max(2, W - rw - 3));
+      const ry = randInt(rng, 2, Math.max(2, H - rh - 3));
+      const rect = { x: rx, y: ry, w: rw, h: rh };
+
+      if (bossBuffer && overlap(rect, bossBuffer)) continue;
+      if (rooms.some(r => overlap(expand(rect, 1), expand(r, 0)))) continue;
+
+      // Carvar un pequeño bloque de relleno y conectarlo al suelo más cercano
+      carveRect(ascii, rect, cs.floor);
+      const anchor = centerOf(rect);
+      const near = findNearestWalkable(ascii, anchor, cs, 48);
+      if (near){
+        carveCorridor(ascii, anchor, near, Math.max(2, corridorWidth-1), rng, cs, rooms);
+      }
+
+      ratio = computeOccupancy(ascii, cs).ratio;
+    }
+  }
+
+  function allBossPathsGoThroughMini(mapNumeric, start, boss, miniboss){
+    if (!mapNumeric || !start || !boss || !miniboss) return false;
+    const fullReach = flood(mapNumeric, start.x, start.y, null);
+    if (fullReach?.[boss.y]?.[boss.x] === Infinity) return false;
+    const block = rectToBlockRect(miniboss, 0);
+    const blockedReach = flood(mapNumeric, start.x, start.y, block);
+    return blockedReach?.[boss.y]?.[boss.x] === Infinity;
   }
 
   function parseRangeAvg(text, fallback=0){
@@ -1840,24 +1971,31 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
     const corridorWidth = Math.max(2, Math.min(4, Math.round(Math.min(width, height) / 30)));
     const maxRestarts = 20;
     const mapArea = width * height;
+    // Ratio configurable de ocupación de celdas jugables (pasillos+salas)
+    const occupancyTarget = clamp(
+      Number(levelConfig.mapOccupancyRatio ?? levelConfig.map_occupancy_ratio ?? levelConfig.mapOccupancy ?? 0.9) || 0.9,
+      0.35,
+      0.98
+    );
 
     for (let attempt = 0; attempt < maxRestarts; attempt++){
-      const fillBase = 0.45 + ((rng.rand?.() ?? Math.random()) * 0.1); // 45%-55%
-      const fillRatio = clamp(fillBase - attempt * 0.02, 0.35, 0.55);
+      const fillAim = clamp(occupancyTarget * 0.6, 0.4, 0.75);
+      const jitter = ((rng.rand?.() ?? Math.random()) * 0.08) - 0.02;
+      const fillRatio = clamp(fillAim + jitter - attempt * 0.015, 0.35, 0.8);
       const targetRoomsArea = mapArea * fillRatio;
       const normalsNeeded = Math.max(0, totalRooms - 3);
       const weights = { control: 1.15, boss: 1.4, miniboss: 1.2, normal: 1 };
       const totalWeight = weights.control + weights.boss + weights.miniboss + weights.normal * Math.max(1, normalsNeeded);
       const baseArea = targetRoomsArea / Math.max(1, totalWeight);
-      const jitter = () => 0.85 + ((rng.rand?.() ?? Math.random()) * 0.3);
-      const controlPicker = () => planRoomSize(rng, baseArea * weights.control * jitter(), width, height);
-      const bossPicker = () => planRoomSize(rng, baseArea * weights.boss * jitter(), width, height);
+      const jitterSize = () => 0.85 + ((rng.rand?.() ?? Math.random()) * 0.3);
+      const controlPicker = () => planRoomSize(rng, baseArea * weights.control * jitterSize(), width, height);
+      const bossPicker = () => planRoomSize(rng, baseArea * weights.boss * jitterSize(), width, height);
       const normalPickers = [];
       if (normalsNeeded > 0) {
-        normalPickers.push(() => planRoomSize(rng, baseArea * weights.miniboss * jitter(), width, height));
+        normalPickers.push(() => planRoomSize(rng, baseArea * weights.miniboss * jitterSize(), width, height));
       }
       for (let n = 1; n < normalsNeeded; n++) {
-        normalPickers.push(() => planRoomSize(rng, baseArea * weights.normal * jitter(), width, height));
+        normalPickers.push(() => planRoomSize(rng, baseArea * weights.normal * jitterSize(), width, height));
       }
 
       const ascii = create2DArray(height, width, cs.wall);
@@ -1877,14 +2015,31 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       rooms.push(...normals);
 
       const candidatesMiniBoss = rooms.filter(r => r !== control && r !== boss);
-      const miniBoss = pickFarthestRoom(candidatesMiniBoss, { x: control.centerX, y: control.centerY });
+      const miniBoss = pickFarthestRoom(candidatesMiniBoss, { x: control.centerX, y: control.centerY }) || candidatesMiniBoss[0];
       if (miniBoss) miniBoss.type = 'miniboss';
+      else continue;
 
       rooms.forEach((r) => markRoom(ascii, r, cs));
       rooms.forEach((r) => applyRoomFloorChars(ascii, r));
-      connectRoomsWithMST(ascii, rooms, corridorWidth, rng, cs);
-      const reachable = ensureRoomsConnected(ascii, rooms, control, corridorWidth, rng, cs);
+      const roomGraph = createRoomGraph(rooms);
+      const roomsWithoutBoss = rooms.filter(r => r !== boss);
+      connectRoomsWithMST(ascii, roomsWithoutBoss, corridorWidth, rng, cs, { graph: roomGraph, avoid: new Set([boss]) });
+      ensureRoomsConnected(ascii, roomsWithoutBoss, control, corridorWidth, rng, cs, roomGraph, new Set([boss]));
+      if (miniBoss && boss) {
+        connectRoomPair(ascii, miniBoss, boss, corridorWidth, rng, cs, rooms, roomGraph);
+      }
+      // Relleno para alcanzar densidad objetivo sin crear islas vacías
+      densifyMap(ascii, rooms, occupancyTarget, corridorWidth, rng, cs);
+      const reachable = floodAscii(ascii, control.centerX|0, control.centerY|0, cs);
+      const numericCheck = asciiToNumeric(ascii);
+      const startTile = findRoomWalkableTile(ascii, control, cs) || { x: control.centerX|0, y: control.centerY|0 };
+      const bossTile = findRoomWalkableTile(ascii, boss, cs) || { x: boss.centerX|0, y: boss.centerY|0 };
+      // Validación de flujo: el mini-boss debe ser cuello de botella hacia el boss
+      const miniGateOk = miniBoss ? allBossPathsGoThroughMini(numericCheck, startTile, bossTile, miniBoss) : true;
+      if (!miniGateOk || !bossPathMandatory(roomGraph, control, miniBoss, boss)) continue;
       sealMapBorder(ascii, cs);
+
+      const occupancyData = computeOccupancy(ascii, cs);
 
       const used = new Set();
       const occupy = (p)=>{ if (p) used.add(`${p.x},${p.y}`); };
@@ -1957,7 +2112,10 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       ascii._miniboss = miniBoss || null;
       ascii._corridorWidth = corridorWidth;
       ascii._reachable = reachable;
+      ascii._roomGraph = roomGraph;
       ascii._roomsGenerated = rooms.length;
+      ascii._occupancy = occupancyData;
+      ascii._occupancyTarget = occupancyTarget;
       return ascii;
     }
 

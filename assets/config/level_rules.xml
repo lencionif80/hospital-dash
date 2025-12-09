@@ -5,6 +5,7 @@
     defaultLightAlpha="0.6"
     maxHeroes="2"
     defaultHero="enrique"
+    mapOccupancyRatio="0.9"
     culling="18"
     massHero="1.0"
     massCart="3.5"
