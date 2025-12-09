@@ -272,6 +272,10 @@
     const cards = document.querySelectorAll('#start-screen .char-card');
     if (!cards.length) return;
 
+    const HERO_AVATAR_SELECTOR = '.hero-avatar';
+    const HERO_SELECTED_CLASS = 'is-selected';
+    const HERO_DESELECTED_CLASS = 'is-deselected';
+
     // Estado inicial: lo que esté marcado con .selected en el HTML
     const selInit = document.querySelector('#start-screen .char-card.selected');
     window.G = window.G || {};
@@ -279,9 +283,25 @@
     window.SELECTED_HERO_ID = window.selectedHeroKey;
     G.selectedHero = window.selectedHeroKey;
 
+    let currentCard = selInit || cards[0];
+    const initialAvatar = currentCard?.querySelector(HERO_AVATAR_SELECTOR);
+    initialAvatar?.classList.add(HERO_SELECTED_CLASS);
+
+    // Limpia clases temporales tras animaciones de salida
+    cards.forEach(btn => {
+      btn.querySelector(HERO_AVATAR_SELECTOR)?.addEventListener('animationend', (ev) => {
+        if (ev.animationName === 'heroSelectedExit') {
+          ev.currentTarget.classList.remove(HERO_DESELECTED_CLASS);
+        }
+      });
+    });
+
     // Al hacer clic en una tarjeta: marcar visualmente y guardar clave
     cards.forEach(btn => {
       btn.addEventListener('click', () => {
+        const previousCard = currentCard;
+        const previousAvatar = previousCard?.querySelector(HERO_AVATAR_SELECTOR);
+
         cards.forEach(b => { b.classList.remove('selected'); b.setAttribute('aria-selected','false'); });
         btn.classList.add('selected');
         btn.setAttribute('aria-selected','true');
@@ -289,6 +309,19 @@
         window.selectedHeroKey = hero;
         window.SELECTED_HERO_ID = hero;
         window.G.selectedHero = hero;
+
+        if (previousAvatar && previousCard !== btn) {
+          previousAvatar.classList.remove(HERO_SELECTED_CLASS);
+          previousAvatar.classList.add(HERO_DESELECTED_CLASS);
+        }
+
+        const newAvatar = btn.querySelector(HERO_AVATAR_SELECTOR);
+        if (newAvatar) {
+          newAvatar.classList.remove(HERO_DESELECTED_CLASS);
+          newAvatar.classList.add(HERO_SELECTED_CLASS);
+        }
+
+        currentCard = btn;
       });
     });
 
