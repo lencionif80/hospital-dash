@@ -725,15 +725,24 @@ button:active { transform: translateY(1px); }
   isolation: isolate; /* separa el marco animado de la UI interna */
 }
 
-/* Marco relajado que enmarca la start-screen sin bloquear la UI */
+/* Marco relajado animado alrededor de la start-screen (sin tapar el contenido) */
 #start-screen .start-screen-frame{
   position: fixed;
   inset: clamp(10px, 1.8vw, 18px);
-  border-radius: 22px;
+  border-radius: 24px;
   pointer-events: none;
-  border: 3px solid transparent;
+  background: rgba(0,0,0,0.08); /* leve oscurecido interior muy sutil */
+  overflow: visible;
+  z-index: 1;
+}
+
+#start-screen .start-screen-frame::before{
+  content: "";
+  position: absolute;
+  inset: 0;
+  padding: 14px; /* grosor del marco */
+  border-radius: 24px;
   background:
-    linear-gradient(135deg, rgba(7,11,18,.72), rgba(7,11,18,.72)) padding-box,
     linear-gradient(120deg,
       #3b82f6,
       #8b5cf6,
@@ -741,12 +750,16 @@ button:active { transform: translateY(1px); }
       #38bdf8,
       #22c55e,
       #a855f7,
-      #fbbf24) border-box;
+      #fbbf24);
   background-size: 240% 240%;
-  box-shadow: 0 14px 42px rgba(0,0,0,.38), 0 0 24px rgba(56,189,248,.18);
   animation: startScreenBorderRelax var(--jazz-beat-ms) ease-in-out infinite;
-  opacity: .95;
-  z-index: 1;
+  box-shadow: 0 14px 42px rgba(0,0,0,.36), 0 0 24px rgba(56,189,248,.2);
+  -webkit-mask:
+    linear-gradient(#000 0 0) content-box,
+    linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+          mask-composite: exclude;
+  pointer-events: none;
 }
 
 /* desnudamos la caja para que no tape la foto */
