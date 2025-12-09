@@ -277,11 +277,300 @@ canvas {
   pointer-events: none;   /* <- clave para que no tape el menú */
 }
 
+/* === HUD: posición PC/móvil y contenedor base =========================
+   - Estas reglas colocan la barra según data-position (arriba/abajo).
+   - El HUD no bloquea el resto del juego salvo en sus zonas internas.
+====================================================================== */
 #hud{
   position: absolute;
-  inset: 0;
+  left: 0;
+  right: 0;
   z-index: 50;
-  pointer-events: none;   /* deja pasar clics al menú */
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px;
+  pointer-events: none;
+}
+
+#hud[data-position="top"],
+#hud.hud-top{ top: 0; bottom: auto; }
+
+#hud[data-position="bottom"],
+#hud.hud-bottom{
+  top: auto;
+  bottom: 0;
+  justify-content: flex-end;
+}
+
+/* === HUD: estética de la barra principal ==============================
+   - Fondo negro semitransparente con degradado y bordes suaves.
+   - Columnas alineadas y separadas visualmente con gap y líneas sutiles.
+====================================================================== */
+#hud .hud-bar{
+  pointer-events: auto;
+  display: grid;
+  grid-template-columns: 1.1fr 1.3fr 1fr;
+  gap: 14px;
+  align-items: stretch;
+  background: linear-gradient(180deg, rgba(0,0,0,0.78), rgba(0,0,0,0.64));
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 14px;
+  padding: 12px 16px;
+  box-shadow: 0 10px 22px rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
+}
+
+#hud .hud-left,
+#hud .hud-center,
+#hud .hud-right{
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+#hud .hud-left,
+#hud .hud-right{
+  justify-content: flex-start;
+}
+
+#hud .hud-center{
+  justify-content: center;
+  padding: 0 12px;
+  border-inline: 1px solid rgba(255,255,255,0.06);
+}
+
+#hud .hud-right{
+  justify-content: flex-end;
+}
+
+#hud .hud-column-stack{
+  display: grid;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
+#hud .hud-left .hud-column-stack{ grid-template-columns: auto 1fr; }
+#hud .hud-right .hud-column-stack{ grid-template-columns: 1fr; text-align: right; }
+
+#hud .hud-item{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  font-family: 'Press Start 2P', ui-monospace, monospace;
+  font-size: 11px;
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  color: #eaf1f7;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+}
+
+#hud .hud-item strong{ font-size: 11px; letter-spacing: 0.02em; }
+#hud .hud-value{ font-weight: 700; color: #7be0ff; }
+
+#hud .hud-hearts{
+  width: 120px;
+  height: 32px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  padding: 4px 6px;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.35);
+  letter-spacing: 2px;
+}
+
+#hud .hud-hero-face{
+  width: 40px;
+  height: 40px;
+  border-radius: 10px;
+  background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.25), rgba(255,255,255,0.05)),
+              rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow: 0 0 0 1px rgba(0,0,0,0.4);
+}
+
+#hud .hud-center .hud-objective-wrapper,
+#hud .hud-center .hud-carry-wrapper{
+  width: 100%;
+  min-height: 36px;
+  padding: 8px 10px;
+  background: rgba(10,15,20,0.65);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 4px rgba(0,0,0,0.35);
+}
+
+#hud .hud-center .hud-carry-wrapper{ display: none; }
+#hud .hud-center .hud-carry-wrapper.show{ display: block; }
+
+#hud .hud-objective{
+  font-size: 12px;
+  line-height: 1.35;
+  text-align: center;
+  color: #c9f1ff;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.55);
+}
+
+#hud .hud-carry{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+#hud .pill{
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  text-align: center;
+  color: #0e1821;
+  background: linear-gradient(135deg, #7be0ff, #5fb7ff);
+  box-shadow: inset 0 -1px 3px rgba(0,0,0,0.25);
+}
+
+#hud .pill-target{ background: linear-gradient(135deg, #ffd480, #ffb347); }
+
+#hud .hud-right .hud-item{ justify-content: flex-end; gap: 10px; }
+
+/* === HUD: scroll y barras de scroll (auto-ocultables) ==================
+   - Se aplica a los bloques con overflow interno.
+   - Barras finas y discretas, visibles solo al desplazarse.
+====================================================================== */
+.hud-scroll{
+  overflow-y: auto;
+  overflow-x: hidden;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(123,224,255,0.6) rgba(255,255,255,0.08);
+  scroll-behavior: smooth;
+  transition: scrollbar-color .2s ease, opacity .2s ease;
+}
+
+.hud-scroll:hover,
+.hud-scroll:active,
+.hud-scroll:focus-within{ scrollbar-color: rgba(123,224,255,0.9) rgba(255,255,255,0.12); }
+
+.hud-scroll::-webkit-scrollbar{ width: 6px; }
+.hud-scroll::-webkit-scrollbar-track{ background: rgba(255,255,255,0.04); border-radius: 999px; }
+.hud-scroll::-webkit-scrollbar-thumb{
+  background: linear-gradient(180deg, rgba(123,224,255,0.85), rgba(95,183,255,0.85));
+  border-radius: 999px;
+  border: 1px solid rgba(0,0,0,0.35);
+}
+.hud-scroll::-webkit-scrollbar-thumb:hover{ background: linear-gradient(180deg, rgba(123,224,255,1), rgba(95,183,255,1)); }
+
+.hud-objective-wrapper{ max-height: 54px; }
+.hud-carry-wrapper{ max-height: 72px; }
+
+#hud .hud-center .hud-objective-wrapper,
+#hud .hud-center .hud-carry-wrapper,
+#hud .hud-bells-list{ opacity: 0.92; }
+
+/* Auto-ocultar (en reposo) usando opacidad */
+.hud-scroll{ opacity: 0.85; }
+.hud-scroll:not(:hover):not(:focus-within):not(:active)::-webkit-scrollbar-thumb{ background: rgba(123,224,255,0.3); }
+.hud-scroll:not(:hover):not(:focus-within):not(:active){ scrollbar-color: rgba(123,224,255,0.35) rgba(255,255,255,0.04); }
+
+/* === HUD: panel de timbres anclado bajo la zona derecha =============== */
+#hud .hud-bells-panel{
+  pointer-events: auto;
+  align-self: flex-end;
+  width: min(360px, 48vw);
+  max-height: 200px;
+  padding: 10px 12px;
+  background: linear-gradient(180deg, rgba(0,0,0,0.86), rgba(0,0,0,0.72));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  box-shadow: 0 10px 24px rgba(0,0,0,0.45);
+  backdrop-filter: blur(6px);
+}
+
+#hud .hud-bells-panel:not(.has-items){ display: none; }
+
+#hud .hud-bells-panel header{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-family: 'Press Start 2P', ui-monospace, monospace;
+  font-size: 11px;
+  color: #eaf1f7;
+  text-shadow: 1px 1px 2px rgba(0,0,0,0.6);
+  margin-bottom: 6px;
+}
+
+#hud .hud-bells-count{
+  padding: 4px 8px;
+  border-radius: 8px;
+  background: rgba(123,224,255,0.18);
+  color: #7be0ff;
+  font-weight: 700;
+}
+
+#hud .hud-bells-list{
+  max-height: 140px;
+  padding-right: 4px;
+  display: grid;
+  gap: 8px;
+}
+
+#hud .hud-bells-empty{
+  margin: 8px 0 0;
+  font-size: 11px;
+  opacity: 0.8;
+  text-align: right;
+}
+
+#hud .hud-bell-row{
+  padding: 8px 10px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+  box-shadow: inset 0 1px 3px rgba(0,0,0,0.35);
+}
+
+#hud .hud-bell-head{
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 11px;
+  gap: 8px;
+}
+
+#hud .hud-bell-name{ color: #f8fbff; }
+#hud .hud-bell-timer{ color: #ffd166; font-weight: 700; }
+
+#hud .hud-bell-bar{
+  margin-top: 6px;
+  height: 8px;
+  border-radius: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+
+#hud .hud-bell-fill{
+  height: 100%;
+  background: linear-gradient(90deg, #7be0ff, #5fb7ff);
+}
+
+#hud .hud-bell-row.is-urgent .hud-bell-fill{ background: linear-gradient(90deg, #ff8c7a, #ff5a6b); }
+
+@media (max-width: 920px){
+  #hud .hud-bar{ grid-template-columns: 1.2fr 1.4fr 1.1fr; padding: 10px 12px; }
+  #hud .hud-item{ font-size: 10px; }
+  #hud .hud-objective{ font-size: 11px; }
+  #hud .hud-hearts{ width: 104px; }
+}
+
+@media (max-width: 680px){
+  #hud .hud-bar{ grid-template-columns: 1fr; gap: 10px; }
+  #hud .hud-center{ border: 0; padding: 0; }
+  #hud .hud-right{ justify-content: flex-start; }
+  #hud .hud-bells-panel{ width: 100%; }
 }
 
 /* Overlays */
@@ -499,17 +788,6 @@ button:active { transform: translateY(1px); }
 #intro-modal.show{ display:grid; place-items:center; }
 #intro-modal video{ width:100vw; height:100vh; object-fit:cover; }
 #intro-skip{ position:absolute; top:16px; right:16px; z-index:20001; }
-
-/* HUD sobre la niebla */
-#hud{
-  position:absolute; left:0; right:0; top:0; height:48px;
-  display:flex; justify-content:space-between; align-items:center;
-  padding:8px 12px; pointer-events:none;
-  color:#e6edf3; font-family:ui-monospace, monospace; text-shadow:1px 1px #000;
-  z-index: 40;
-}
-#hud .hud-left, #hud .hud-right { pointer-events:none; }
-#hud .hearts{ letter-spacing:2px; }
 
 /* === STACK FINAL DE CAPAS (siempre gana) =============================== */
 #game-container #gameCanvas      { z-index: 10 !important; position:absolute; inset:0; }

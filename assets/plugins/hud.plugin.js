@@ -39,7 +39,9 @@
     urgenciasValue: null,
     scoreValue: null,
     objectiveText: null,
+    objectiveWrapper: null,
     carryBox: null,
+    carryWrapper: null,
     carryPrimary: null,
     carrySecondary: null,
     bellsPanel: null,
@@ -82,12 +84,24 @@
     }
     const root = document.createElement('div');
     root.id = 'hud';
+
+    const bar = document.createElement('div');
+    bar.className = 'hud-bar';
+
     const left = document.createElement('div');
     left.className = 'hud-left';
+    const leftStack = document.createElement('div');
+    leftStack.className = 'hud-column-stack';
+
     const center = document.createElement('div');
     center.className = 'hud-center';
+    const centerStack = document.createElement('div');
+    centerStack.className = 'hud-column-stack';
+
     const right = document.createElement('div');
     right.className = 'hud-right';
+    const rightStack = document.createElement('div');
+    rightStack.className = 'hud-column-stack';
 
     const heartsCanvas = document.createElement('canvas');
     heartsCanvas.className = 'hud-hearts';
@@ -102,35 +116,47 @@
     const patientsStat = createHudStat('Pacientes', 'hud-patients');
     const pendingStat = createHudStat('Pendientes', 'hud-pending');
     const furiousStat = createHudStat('Furiosas activas', 'hud-furious');
-    left.appendChild(patientsStat.wrap);
-    left.appendChild(pendingStat.wrap);
-    left.appendChild(furiousStat.wrap);
+    leftStack.appendChild(patientsStat.wrap);
+    leftStack.appendChild(pendingStat.wrap);
+    leftStack.appendChild(furiousStat.wrap);
 
     const objective = document.createElement('div');
     objective.className = 'hud-objective';
     objective.textContent = 'Objetivo: ninguno';
+    const objectiveWrapper = document.createElement('div');
+    objectiveWrapper.className = 'hud-objective-wrapper hud-scroll';
+    objectiveWrapper.appendChild(objective);
 
     const carryBox = document.createElement('div');
     carryBox.className = 'hud-carry';
     carryBox.hidden = true;
+    const carryWrapper = document.createElement('div');
+    carryWrapper.className = 'hud-carry-wrapper hud-scroll';
+    carryWrapper.hidden = true;
     const carryPrimary = document.createElement('div');
     carryPrimary.className = 'pill pill-label';
     const carrySecondary = document.createElement('div');
     carrySecondary.className = 'pill pill-target';
     carryBox.appendChild(carryPrimary);
     carryBox.appendChild(carrySecondary);
+    carryWrapper.appendChild(carryBox);
 
-    center.appendChild(objective);
-    center.appendChild(carryBox);
+    centerStack.appendChild(objectiveWrapper);
+    centerStack.appendChild(carryWrapper);
 
     const urgenciasStat = createHudStat('Urgencias', 'hud-urgencias');
     const scoreStat = createHudStat('Puntos', 'hud-score');
-    right.appendChild(urgenciasStat.wrap);
-    right.appendChild(scoreStat.wrap);
+    rightStack.appendChild(urgenciasStat.wrap);
+    rightStack.appendChild(scoreStat.wrap);
 
-    root.appendChild(left);
-    root.appendChild(center);
-    root.appendChild(right);
+    left.appendChild(leftStack);
+    center.appendChild(centerStack);
+    right.appendChild(rightStack);
+
+    bar.appendChild(left);
+    bar.appendChild(center);
+    bar.appendChild(right);
+    root.appendChild(bar);
 
     const bellsPanel = document.createElement('section');
     bellsPanel.className = 'hud-bells-panel';
@@ -142,7 +168,7 @@
     bellsHeader.appendChild(bellsTitle);
     bellsHeader.appendChild(bellsCount);
     const bellsList = document.createElement('div');
-    bellsList.className = 'hud-bells-list';
+    bellsList.className = 'hud-bells-list hud-scroll';
     const bellsEmpty = document.createElement('p');
     bellsEmpty.className = 'hud-bells-empty';
     bellsEmpty.textContent = 'Sin timbres activos';
@@ -168,7 +194,9 @@
     HUD_DOM.urgenciasValue = urgenciasStat.value;
     HUD_DOM.scoreValue = scoreStat.value;
     HUD_DOM.objectiveText = objective;
+    HUD_DOM.objectiveWrapper = objectiveWrapper;
     HUD_DOM.carryBox = carryBox;
+    HUD_DOM.carryWrapper = carryWrapper;
     HUD_DOM.carryPrimary = carryPrimary;
     HUD_DOM.carrySecondary = carrySecondary;
     HUD_DOM.bellsPanel = bellsPanel;
@@ -334,6 +362,8 @@
     if (!HUD_DOM.carryBox) return;
     if (carry) {
       HUD_DOM.carryBox.hidden = false;
+      if (HUD_DOM.carryWrapper) HUD_DOM.carryWrapper.hidden = false;
+      if (HUD_DOM.carryWrapper) HUD_DOM.carryWrapper.classList.add('show');
       if (HUD_DOM.carryPrimary) HUD_DOM.carryPrimary.textContent = carry.label || 'Pastilla';
       if (HUD_DOM.carrySecondary) {
         const who = carry.patientName || carry.pairName || 'Paciente asignado';
@@ -341,6 +371,10 @@
       }
     } else {
       HUD_DOM.carryBox.hidden = true;
+      if (HUD_DOM.carryWrapper) {
+        HUD_DOM.carryWrapper.hidden = true;
+        HUD_DOM.carryWrapper.classList.remove('show');
+      }
     }
   }
 
