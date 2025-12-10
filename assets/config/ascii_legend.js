@@ -234,10 +234,20 @@
     return PLACEHOLDER_DEBUG_COLORS['?'];
   }
 
+  function pickTextColorForBackground(bg) {
+    // bg viene como '#rrggbb' o similar
+    if (typeof bg !== 'string' || !/^#([0-9a-f]{6})$/i.test(bg)) return '#ffffff';
+    const r = parseInt(bg.slice(1, 3), 16);
+    const g = parseInt(bg.slice(3, 5), 16);
+    const b = parseInt(bg.slice(5, 7), 16);
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b; // fórmula sencilla
+    return luminance > 140 ? '#111111' : '#f8f8f8'; // negro sobre claro, blanco sobre oscuro
+  }
+
   function ensurePlaceholderSprite(key, char, color){
     const sprites = root.Sprites;
     if (!sprites || !sprites._imgs) return null;
-    const cacheKey = `${key}_${char || '?'}`;
+    const cacheKey = `${key}_${char || '?'}_${color || 'default'}`;
     if (sprites._imgs[cacheKey]) return cacheKey;
     const tile = sprites._opts?.tile || root.TILE_SIZE || 32;
     try {
@@ -249,11 +259,12 @@
       ctx.strokeStyle = 'rgba(0,0,0,0.5)';
       ctx.lineWidth = 2;
       ctx.strokeRect(1, 1, tile - 2, tile - 2);
-      ctx.fillStyle = (color === '#111111') ? '#f8f8f8' : '#ffffff';
+      const textColor = pickTextColorForBackground(color || '#ff00ff');
+      ctx.fillStyle = textColor;
       ctx.font = `${Math.floor(tile * 0.7)}px monospace`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(char || '?', tile * 0.5, tile * 0.55);
+      ctx.fillText(char || '?', tile * 0.5, tile * 0.5);
       sprites._imgs[cacheKey] = canvas;
       if (!sprites._keys.includes(cacheKey)) sprites._keys.push(cacheKey);
       return cacheKey;
@@ -269,9 +280,64 @@
     return { x: tx * tile, y: ty * tile, tile };
   }
 
-  // Diagnóstico: esta copia de spawnFallbackPlaceholder duplicaba la lógica y registraba por
-  // console.error; delegamos en la versión canónica de placement.plugin.js.
-  PlacementAPI.spawnFallbackPlaceholder = PlacementAPI.spawnFallbackPlaceholder;
+  PlacementAPI.spawnFallbackPlaceholder = function spawnFallbackPlaceholder(
+    asciiChar,
+    def,
+    tx,
+    ty,
+    failReason,
+    context = {}
+  ) {
+    try {
+      const game = context.G || root.G || {};
+      const map = context.map || game.map || null;
+      ensureFloorAt(map || game, tx, ty);
+      const tile = root.TILE_SIZE || root.TILE || 32;
+      const ascii = asciiChar || context.char || def?.char || '?';
+      const color = resolvePlaceholderColor(ascii, def || null, failReason);
+      const spriteKey = ensurePlaceholderSprite('spawn_placeholder', ascii, color);
+      const placeholder = {
+        kind: def?.kind || def?.key || 'PLACEHOLDER',
+        type: def?.type,
+        factoryKey: def?.factoryKey,
+        x: tx * tile,
+        y: ty * tile,
+        w: tile,
+        h: tile,
+        blocking: false,
+        dynamic: false,
+        pushable: false,
+        char: ascii,
+        color,
+        spriteKey,
+        placeholder: true,
+        rigOk: false,
+      };
+
+      const shouldRegister = context.autoRegister !== false;
+      if (shouldRegister && Array.isArray(game.entities) && !game.entities.includes(placeholder)) {
+        game.entities.push(placeholder);
+      }
+
+      try {
+        if (typeof console !== 'undefined' && console.error) {
+          console.error('[SPAWN_FALLBACK]', {
+            char: ascii,
+            kind: def?.kind,
+            factoryKey: def?.factoryKey,
+            x: placeholder.x,
+            y: placeholder.y,
+            reason: failReason || null,
+          });
+        }
+      } catch (_) {}
+
+      return placeholder;
+    } catch (err) {
+      try { console.error('[SPAWN_FALLBACK_FATAL]', err); } catch (_) {}
+      return null;
+    }
+  };
 
   root.AsciiLegend.spawnFallbackPlaceholder = PlacementAPI.spawnFallbackPlaceholder;
 
@@ -279,29 +345,20 @@
     const def = (typeof defOrChar === 'string' || typeof defOrChar === 'number')
       ? PlacementAPI.getDefFromChar(defOrChar, { context: 'PlacementAPI.spawnFromAscii' })
       : defOrChar;
-    const asciiChar = def?.char || char || extraCtx?.char || (typeof defOrChar === 'string' ? defOrChar : null) || '?';
-    const world = gridToWorld(tx, ty);
-    const ctx = extraCtx || {};
-    const fallback = (reason, stage, err) => PlacementAPI.spawnFallbackPlaceholder(
-      asciiChar,
-      def || null,
-      tx,
-      ty,
-      'ascii_legend.spawnFromAscii',
-      {
-        ...ctx,
-        x: world.x,
-        y: world.y,
-        reason,
-        error: err ? (err?.message || err) : null,
-        stage: stage || 'ascii_legend.spawnFromAscii'
-      }
-    );
-
+    const asciiChar = char || extraCtx?.char || def?.char || (typeof defOrChar === 'string' ? defOrChar : null);
     if (!def || typeof tx !== 'number' || typeof ty !== 'number') {
-      return fallback('no def found for char', 'ascii_legend.spawnFromAscii');
+      return PlacementAPI.spawnFallbackPlaceholder(
+        asciiChar,
+        null,
+        tx,
+        ty,
+        'AsciiLegend entry missing',
+        extraCtx
+      );
     }
 
+    const world = gridToWorld(tx, ty);
+    const ctx = extraCtx || {};
     try {
       console.log('[SPAWN_ASCII]', {
         char: asciiChar,
@@ -327,50 +384,54 @@
       return entity;
     };
 
-    if (!factoryKey) {
-      return fallback('no factoryKey defined', 'ascii_legend.spawnFromAscii');
-    }
-
-    if (def.isSpawn) {
-      try {
-        const entity = root.SpawnerManager?.spawnFromDef?.(def, tx, ty, opts);
-        return entity ? applyLegendTint(entity) : fallback('Spawner returned null', 'SpawnerManager.spawnFromDef');
-      } catch (err) {
-        return fallback(`spawnFromAscii error: ${err?.message || err}`, 'SpawnerManager.spawnFromDef', err);
-      }
-    }
     if (kind === 'wall' || kind === 'void') return null;
 
-    if (typeof def.spawnFromAscii === 'function') {
+    let entity = null;
+    let failReason = '';
+    if (def.isSpawn) {
       try {
-        const e = def.spawnFromAscii(tx, ty, opts, ctx);
-        return e || fallback('spawnFromAscii returned null', 'def.spawnFromAscii');
+        entity = root.SpawnerManager?.spawnFromDef?.(def, tx, ty, opts) || null;
+        if (!entity) failReason = 'Spawner returned null';
       } catch (err) {
-        return fallback(`spawnFromAscii error: ${err?.message || err}`, 'def.spawnFromAscii', err);
+        failReason = `spawnFromDef error: ${err?.message || err}`;
+      }
+    } else if (kind !== 'wall' && kind !== 'void') {
+      try {
+        if (typeof def.spawnFromAscii === 'function') {
+          entity = def.spawnFromAscii(tx, ty, opts, ctx) || null;
+          if (!entity) failReason = 'spawnFromAscii returned null';
+        } else if (root.Entities?.[factoryKey]?.spawnFromAscii) {
+          entity = root.Entities[factoryKey].spawnFromAscii(tx, ty, opts, ctx) || null;
+          if (!entity) failReason = 'Entities.spawnFromAscii returned null';
+        } else {
+          const factory = root.Entities?.factory;
+          if (!factory || typeof factory !== 'function') {
+            failReason = 'Entities.factory missing';
+          } else {
+            try {
+              entity = factory(factoryKey, opts) || null;
+              if (!entity) failReason = `Factory returned null: ${factoryKey}`;
+            } catch (err) {
+              failReason = `Exception in Entities.factory(${factoryKey}): ${err?.message || err}`;
+            }
+          }
+        }
+      } catch (err) {
+        failReason = err?.message || String(err);
       }
     }
 
-    if (root.Entities?.[factoryKey]?.spawnFromAscii) {
-      try {
-        const e = root.Entities[factoryKey].spawnFromAscii(tx, ty, opts, ctx);
-        return e || fallback('spawnFromAscii missing', 'Entities.spawnFromAscii');
-      } catch (err) {
-        return fallback(`spawnFromAscii error: ${err?.message || err}`, 'Entities.spawnFromAscii', err);
-      }
+    if (!entity) {
+      return PlacementAPI.spawnFallbackPlaceholder(
+        asciiChar,
+        { kind, type: def.type, factoryKey },
+        tx,
+        ty,
+        failReason || 'Entities.factory failed',
+        ctx
+      );
     }
 
-    const factory = root.Entities?.factory;
-    if (!factory || typeof factory !== 'function') {
-      return fallback('factory no encontrada', 'Entities.factory');
-    }
-    try {
-      const entity = factory(factoryKey, opts);
-      if (!entity) {
-        return fallback(`Factory returned null: ${factoryKey}`, 'Entities.factory');
-      }
-      return applyLegendTint(entity);
-    } catch (err) {
-      return fallback(`Entities.factory error: ${err?.message || err}`, 'Entities.factory', err);
-    }
+    return applyLegendTint(entity);
   };
 })(typeof window !== 'undefined' ? window : globalThis);
