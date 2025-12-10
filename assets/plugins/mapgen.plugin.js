@@ -720,7 +720,7 @@ function charFor(key, fallback){
 // **defecto + extra**
 const CHARSET_DEFAULT = {
   wall:charFor('wall', '#'), floor:charFor('floor', '.'),
-  door:charFor('door_normal', 'd'), bossDoor:charFor('door_boss', 'u'),
+  door:charFor('door_normal', 'd'), bossDoor:charFor('door_urgent', 'u'),
   elev:charFor('elevator', 'E'), elevClosed:charFor('elevator', 'E'),
   start:charFor('hero_spawn', 'S'), light:charFor('light_ok', 'L'), lightBroken:charFor('light_broken', 'l'),
   spAnimal:charFor('spawn_animal', 'A'), spStaff:charFor('spawn_npc', 'N'), spCart:charFor('spawn_cart', 'C'),
