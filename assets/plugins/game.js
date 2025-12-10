@@ -25,6 +25,8 @@
     MOSQUITO: 7,
     DOOR: 8,
     BOSS: 9,
+    DOOR_NORMAL: 'door_normal',
+    DOOR_URGENT: 'door_urgent',
   };
 
   const COLORS = {
@@ -917,7 +919,9 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
           G.roomLights.push({ x: (p.x || wx) + TILE / 2, y: (p.y || wy) + TILE / 2, r: 5.5 * TILE, baseA: 0.28 });
         }
         return p;
-      }
+      },
+      [ENT.DOOR_NORMAL]: (tx, ty) => window.Entities?.Doors?.spawnNormalDoor?.(undefined, undefined, { tx, ty }),
+      [ENT.DOOR_URGENT]: (tx, ty) => window.Entities?.Doors?.spawnUrgentDoor?.(undefined, undefined, { tx, ty })
     };
 
     const spawnFromKind = (def, tx, ty, ch) => {
@@ -1685,6 +1689,8 @@ function updateEntities(dt){
     updateEntities(dt);
     // ascensores
     Entities?.Elevator?.update?.(dt);
+    // puertas (usan IA propia y comparten capa visual con el héroe)
+    window.Entities?.Doors?.updateAllDoors?.(dt);
 
     if (window.MouseNav && window._mouseNavInited) MouseNav.update(dt);
 
