@@ -1743,14 +1743,6 @@ function drawEntities(c2){
       if (!ctx) continue;
 
       const cam = G?.camera;
-      const colorMap = {
-        'p': '#ff4d4d',
-        'b': '#ffb347',
-        'g': '#66cc66',
-        'd': '#9999ff',
-        'E': '#66ccff',
-        '?': '#ff3366',
-      };
       const screenX = (ctx === c2) ? e.x : (e.x - (cam?.x || 0));
       const screenY = (ctx === c2) ? e.y : (e.y - (cam?.y || 0));
       const halfW = (e.w || TILE) * 0.5;
@@ -1758,15 +1750,17 @@ function drawEntities(c2){
       ctx.save();
       ctx.translate(screenX, screenY);
 
-      ctx.fillStyle = colorMap[e._debugChar] || e._debugColor || '#ff3366';
+      ctx.fillStyle = e._debugColor || '#ff3366';
+      ctx.globalAlpha = 0.95;
       ctx.fillRect(-halfW, -halfH, e.w || TILE, e.h || TILE);
 
       ctx.strokeStyle = '#000';
       ctx.lineWidth = 2;
       ctx.strokeRect(-halfW, -halfH, e.w || TILE, e.h || TILE);
 
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px monospace';
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = e._debugTextColor || '#ffffff';
+      ctx.font = 'bold 16px monospace';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
       ctx.fillText(e._debugChar || '?', 0, 0);
@@ -2128,18 +2122,87 @@ function drawEntities(c2){
     return `hsl(${h}, ${s}%, ${l}%)`;
   }
 
+  function pickDebugColorForChar(charLabel, def){
+    try {
+      const palette = window.__FALLBACK_CHAR_COLORS = window.__FALLBACK_CHAR_COLORS || {};
+      const tintValue = (def && (def.color || def.tint || def.debugColor)) || null;
+      if (tintValue) {
+        palette[charLabel] = tintValue;
+        return tintValue;
+      }
+
+      const table = {
+        'p': '#ff7f32',
+        'b': '#ff4d4d',
+        'g': '#3cb371',
+        'd': '#6699ff',
+        'E': '#66ccff',
+        '#': '#ff3366',
+      };
+
+      if (palette[charLabel]) return palette[charLabel];
+      if (table[charLabel]) return table[charLabel];
+
+      const color = computeDeterministicColorForChar(charLabel || '?');
+      palette[charLabel] = color;
+      return color;
+    } catch (_) {
+      return '#ff3366';
+    }
+  }
+
+  function pickDebugTextColorForBackground(bg){
+    try {
+      if (typeof bg !== 'string') return '#ffffff';
+      const str = bg.trim().toLowerCase();
+
+      const parseHex = (hex) => {
+        const clean = hex.replace('#', '');
+        return clean.length === 3
+          ? clean.split('').map((c) => parseInt(c + c, 16))
+          : [clean.slice(0,2), clean.slice(2,4), clean.slice(4,6)].map((c) => parseInt(c, 16));
+      };
+
+      const hslToRgb = (h, s, l) => {
+        const _s = s / 100;
+        const _l = l / 100;
+        const c = (1 - Math.abs(2 * _l - 1)) * _s;
+        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+        const m = _l - c / 2;
+        let r = 0, g = 0, b = 0;
+        if (0 <= h && h < 60) { r = c; g = x; b = 0; }
+        else if (60 <= h && h < 120) { r = x; g = c; b = 0; }
+        else if (120 <= h && h < 180) { r = 0; g = c; b = x; }
+        else if (180 <= h && h < 240) { r = 0; g = x; b = c; }
+        else if (240 <= h && h < 300) { r = x; g = 0; b = c; }
+        else { r = c; g = 0; b = x; }
+        return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+      };
+
+      let r, g, b;
+      if (str.startsWith('hsl')) {
+        const parts = str.replace(/hsl\(|\)|%/g, '').split(',').map((v) => parseFloat(v.trim()));
+        if (parts.length >= 3 && parts.every((n) => Number.isFinite(n))) {
+          [r, g, b] = hslToRgb(parts[0], parts[1], parts[2]);
+        }
+      } else {
+        [r, g, b] = parseHex(str);
+      }
+
+      if (![r,g,b].every((n) => Number.isFinite(n))) return '#ffffff';
+
+      const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+      return luma > 160 ? '#000000' : '#ffffff';
+    } catch (_) {
+      return '#ffffff';
+    }
+  }
+
   function createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def, extra) {
     const T = window.TILE_SIZE || 32;
 
-    window.__FALLBACK_CHAR_COLORS = window.__FALLBACK_CHAR_COLORS || {};
-    const palette = window.__FALLBACK_CHAR_COLORS;
-    const colorFromDef = (def && (def.color || def.tint || def.debugColor)) || null;
-
-    let baseColor = colorFromDef || palette[charLabel];
-    if (!baseColor) {
-      baseColor = computeDeterministicColorForChar(charLabel || '?');
-      palette[charLabel] = baseColor;
-    }
+    const bgColor = pickDebugColorForChar(charLabel, def);
+    const textColor = pickDebugTextColorForBackground(bgColor);
 
     const e = {
       id: (typeof genId === 'function') ? genId() : ('fallback-' + Math.random().toString(36).slice(2)),
@@ -2158,7 +2221,8 @@ function drawEntities(c2){
       collisionMask: 'default',
       _debugSpawnPlaceholder: true,
       _debugChar: charLabel || '?',
-      _debugColor: baseColor,
+      _debugColor: bgColor,
+      _debugTextColor: textColor,
       _debugExtra: extra || null,
       aiUpdate: function () {},
       physicsUpdate: function () {},
@@ -2173,6 +2237,7 @@ function drawEntities(c2){
       _culled: false
     };
 
+    // Los [SPAWN_FALLBACK] terminan siempre aquí y se meten en G.entities para pasar por el render.
     if (window.G && Array.isArray(G.entities)) {
       G.entities.push(e);
     }
@@ -2282,6 +2347,7 @@ function drawEntities(c2){
     const isSafeKind = !!SAFE_SPAWN_KINDS[kind];
 
     const buildReason = (code, extra) => ({ code, ...(extra || {}), kind, factoryKey });
+    // [DIAGNÓSTICO] Los [SPAWN_FALLBACK] pasan por aquí y llaman a createSpawnDebugPlaceholderEntity incluso si PlacementAPI falla.
     const logFallback = (reasonObj) => {
       const reason = reasonObj || buildReason('unknown');
       try {
