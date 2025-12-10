@@ -2080,35 +2080,50 @@ function drawEntities(c2){
 
   function getDebugColorForChar(charLabel, def) {
     try {
-      const map = window.SPAWN_FALLBACK_CHAR_COLORS || {
-        'p': '#ffb74d', 'i': '#4fc3f7', 'b': '#ff8a80', 'g': '#81c784', 'k': '#ba68c8',
-        'm': '#ce93d8', 'r': '#f06292', 'd': '#a1887f', 'U': '#fff176', 'L': '#ffeb3b',
-        'X': '#ff5252'
-      };
-      if (map && Object.prototype.hasOwnProperty.call(map, charLabel)) {
-        return map[charLabel];
+      window.__FALLBACK_CHAR_COLORS = window.__FALLBACK_CHAR_COLORS || {};
+      const palette = window.__FALLBACK_CHAR_COLORS;
+
+      const tintValue = (def && (def.color || def.tint || def.debugColor)) || null;
+      if (tintValue) {
+        palette[charLabel] = tintValue;
+        return tintValue;
       }
-    } catch (_) {}
 
-    if (def && def.color) return def.color;
-    if (def && def.debugColor) return def.debugColor;
-    if (def && def.tint) return def.tint;
+      if (palette[charLabel]) return palette[charLabel];
 
-    try {
-      if (def && def.specialRoom && window.AsciiLegend && window.AsciiLegend.TINT_COLORS) {
-        const room = String(def.specialRoom);
-        if (room === 'control') return window.AsciiLegend.TINT_COLORS.blue;
-        if (room === 'boss') return window.AsciiLegend.TINT_COLORS.red;
-        if (room === 'miniboss') return window.AsciiLegend.TINT_COLORS.green;
-      }
-    } catch (_) {}
-
-    return '#ff3366';
+      const color = computeDeterministicColorForChar(charLabel || '?');
+      palette[charLabel] = color;
+      return color;
+    } catch (_) {
+      return '#ff3366';
+    }
   }
 
-  function createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def, reason) {
+  function computeDeterministicColorForChar(charLabel){
+    const str = String(charLabel || '?');
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      hash = ((hash << 5) - hash + str.charCodeAt(i)) | 0;
+    }
+    const h = Math.abs(hash % 360);
+    const s = 65;
+    const l = 55;
+    return `hsl(${h}, ${s}%, ${l}%)`;
+  }
+
+  function createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def, extra) {
     const T = window.TILE_SIZE || 32;
-    const color = getDebugColorForChar(charLabel || '?', def || null);
+
+    window.__FALLBACK_CHAR_COLORS = window.__FALLBACK_CHAR_COLORS || {};
+    const palette = window.__FALLBACK_CHAR_COLORS;
+    const colorFromDef = (def && (def.color || def.tint || def.debugColor)) || null;
+
+    let baseColor = colorFromDef || palette[charLabel];
+    if (!baseColor) {
+      baseColor = computeDeterministicColorForChar(charLabel || '?');
+      palette[charLabel] = baseColor;
+    }
+
     const e = {
       id: (typeof genId === 'function') ? genId() : ('fallback-' + Math.random().toString(36).slice(2)),
       kind: window.ENT && window.ENT.DEBUG_PLACEHOLDER || 'DEBUG_PLACEHOLDER',
@@ -2118,13 +2133,16 @@ function drawEntities(c2){
       y: worldY,
       w: T,
       h: T,
+      vx: 0,
+      vy: 0,
+      dir: 0,
       solid: false,
       collisionLayer: 'default',
       collisionMask: 'default',
       _debugSpawnPlaceholder: true,
       _debugChar: charLabel || '?',
-      _debugColor: color,
-      _debugReason: reason || 'unknown',
+      _debugColor: baseColor,
+      _debugExtra: extra || null,
       aiUpdate: function () {},
       physicsUpdate: function () {},
       onDamage: function () {},
@@ -2202,6 +2220,124 @@ function drawEntities(c2){
         entity = null;
         safeLogSpawnFallbackError('createSpawnDebugPlaceholderEntity', err, { charLabel, def, tx, ty, worldX, worldY });
       }
+    }
+
+    return entity;
+  }
+
+  const SAFE_SPAWN_KINDS = {
+    hero: true,
+    hero_spawn: true,
+    player: true
+  };
+
+  function spawnEntityFromAsciiSafe(params){
+    const {
+      G,
+      map,
+      p,
+      ch,
+      def,
+      tx,
+      ty,
+      worldX,
+      worldY,
+      type,
+      spawnFromAscii,
+      heroSpawner
+    } = params || {};
+
+    const charLabel = (p && p.char) || ch || '?';
+    const kindRaw = def?.kind || def?.key || type || p?.type || p?.kind || charLabel;
+    const kind = String(kindRaw || '').toLowerCase();
+    const factoryKey = def?.factoryKey || null;
+
+    const logPayload = {
+      char: charLabel,
+      kind,
+      factoryKey,
+      grid: { x: tx, y: ty },
+      world: { x: worldX, y: worldY },
+      placement: p || null
+    };
+    try { console.log('[SPAWN_ASCII]', logPayload); } catch (_) {}
+
+    const isSafeKind = !!SAFE_SPAWN_KINDS[kind];
+
+    const buildReason = (code, extra) => ({ code, ...(extra || {}), kind, factoryKey });
+    const logFallback = (reasonObj) => {
+      const reason = reasonObj || buildReason('unknown');
+      try {
+        console.warn('[SPAWN_FALLBACK]', { char: charLabel, kind, grid: { x: tx, y: ty }, world: { x: worldX, y: worldY }, reason });
+      } catch (_) {}
+      try {
+        if (typeof registerSpawnFallback === 'function') {
+          registerSpawnFallback({
+            char: charLabel,
+            kind,
+            factoryKey,
+            grid: { x: tx, y: ty },
+            world: { x: worldX, y: worldY },
+            reason
+          });
+        }
+      } catch (_) {}
+      return createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def || null, reason);
+    };
+
+    if (!isSafeKind) {
+      return logFallback(buildReason('unsafe-kind'));
+    }
+
+    let entity = null;
+    let lastReason = null;
+
+    if (!entity && typeof heroSpawner === 'function' && (kind.includes('hero') || kind === 'player')) {
+      try { entity = heroSpawner(worldX, worldY, params); }
+      catch (err) {
+        entity = null;
+        lastReason = buildReason('hero_spawn_error', { error: String((err && err.message) || err) });
+        safeLogSpawnFallbackError('heroSpawner', err, { charLabel, def, tx, ty, worldX, worldY, kind });
+      }
+    }
+
+    if (!entity && spawnFromAscii && (def || ch)) {
+      try {
+        entity = spawnFromAscii(def || ch, tx, ty, { G, map, char: charLabel, placement: p, x: worldX, y: worldY }, charLabel);
+      } catch (err) {
+        entity = null;
+        lastReason = buildReason('spawnFromAscii_error', { error: String((err && err.message) || err) });
+        safeLogSpawnFallbackError('spawnFromAscii', err, { charLabel, def, tx, ty, worldX, worldY, kind });
+      }
+    }
+
+    if (!entity && factoryKey && window.Entities && typeof window.Entities.factory === 'function') {
+      try {
+        entity = window.Entities.factory(factoryKey, { tx, ty, x: worldX, y: worldY, _ascii: def });
+      } catch (err) {
+        entity = null;
+        lastReason = buildReason('missingFactory', { error: String((err && err.message) || err) });
+        safeLogSpawnFallbackError('Entities.factory', err, { charLabel, def, tx, ty, worldX, worldY, kind });
+      }
+    }
+
+    if (!entity && window.PlacementAPI && typeof window.PlacementAPI.spawnFallbackPlaceholder === 'function') {
+      try {
+        entity = window.PlacementAPI.spawnFallbackPlaceholder(charLabel, def || null, tx, ty, 'spawnEntityFromAsciiSafe', {
+          x: worldX,
+          y: worldY,
+          reason: (lastReason && lastReason.code) || 'placement-fallback'
+        });
+      } catch (err) {
+        entity = null;
+        lastReason = buildReason('placement_error', { error: String((err && err.message) || err) });
+        safeLogSpawnFallbackError('PlacementAPI.spawnFallbackPlaceholder', err, { charLabel, def, tx, ty, worldX, worldY, kind });
+      }
+    }
+
+    if (!entity) {
+      lastReason = lastReason || buildReason('missingFactory');
+      entity = logFallback(lastReason);
     }
 
     return entity;
@@ -2369,172 +2505,35 @@ function drawEntities(c2){
         markCharSeen(ch, def);
         const type = String(p.type || def?.kind || def?.key || ch || '').toLowerCase();
 
-        let entity = null;
-        let handled = false;
-
-        if ((type === 'player' || type === 'hero' || type === 'start' || type === 'hero_spawn') && !G.player) {
-          entity = (typeof makePlayer === 'function')
-            ? makePlayer(worldX, worldY)
-            : (window.Entities?.Hero?.spawnPlayer?.(worldX, worldY, {}) || null);
-          if (entity) {
-            G.player = entity;
-            handled = true;
-          }
-        }
-        else if (type === 'patient') {
-          entity = (window.Entities?.Patient?.spawn?.(worldX, worldY, p)) || makeRect(worldX, worldY, T, T, ENT.PATIENT, '#ffd166', false, true);
-          entity.name = p.name || entity.name || `Paciente_${G.patients.length+1}`;
-          handled = true;
-        }
-        else if (type === 'pill') {
-          entity = (window.Entities?.Objects?.spawnPill?.(p.name || p.label, worldX, worldY, p))
-            || makeRect(worldX, worldY, T * 0.6, T * 0.6, ENT.PILL, '#a0ffcf', false, false);
-          entity.label = p.label || entity.label || 'Píldora';
-          entity.targetName = p.targetName || entity.targetName || (G.patients[0]?.name) || null;
-          handled = true;
-        }
-        else if (type === 'door') {
-          entity = makeRect(worldX, worldY, T, T, ENT.DOOR, '#7f8c8d', false, true, { mass: 0, rest: 0, mu: 0, static: true });
-          handled = true;
-        }
-        else if (type === 'boss') {
-          entity = spawnBossForLevel(G.level || 1, worldX, worldY);
-          if (!entity) {
-            entity = makeRect(worldX, worldY, T * 1.2, T * 1.2, ENT.BOSS, '#e74c3c', false, true, { mass: 8, rest: 0.1, mu: 0.1, static: true });
-          }
-          handled = true;
-        }
-        else if (type === 'cart') {
-          entity = makeRect(worldX, worldY, T, T, ENT.CART, '#b0956c', true, true, { mass: 6, rest: 0.35, mu: 0.06 });
-          handled = true;
-        }
-
-        if (!handled && def && (def.kind === 'wall' || def.kind === 'void' || def.baseKind === 'floor' || def.kind === 'floor')) {
+        if (def && (def.kind === 'wall' || def.kind === 'void' || def.baseKind === 'floor' || def.kind === 'floor')) {
           continue; // terreno puro, ya procesado en el mapa de tiles
         }
 
-        if (!handled && def) {
-          const kind = (def.kind || def.key || type || '').toLowerCase();
-          switch (kind) {
-            case 'mosquito':
-              entity = window.MosquitoAPI?.spawn?.(worldX, worldY, { _units: 'px' })
-                || window.Entities?.spawnMosquitoAtTile?.(tx, ty, { _ascii: def });
-              handled = !!entity;
-              break;
-            case 'rat':
-              entity = window.Entities?.spawnRatAtTile?.(tx, ty, { _ascii: def });
-              handled = !!entity;
-              break;
-            case 'door_normal':
-            case 'door':
-              entity = window.Entities?.Doors?.spawnNormalDoor?.(worldX, worldY, { tx, ty, _ascii: def });
-              handled = !!entity;
-              break;
-            case 'door_boss':
-              entity = window.Entities?.Doors?.spawnUrgentDoor?.(worldX, worldY, { tx, ty, _ascii: def });
-              handled = !!entity;
-              break;
-            case 'cart_food':
-              entity = window.Entities?.Carts?.spawnCartFood?.(tx, ty, { _ascii: def });
-              handled = !!entity;
-              break;
-            case 'cart_meds':
-              entity = window.Entities?.Carts?.spawnCartMeds?.(tx, ty, { _ascii: def });
-              handled = !!entity;
-              break;
-            case 'cart_emergency':
-              // TODO(factory) - falta implementación directa
-              break;
-            case 'fire':
-              entity = window.FireAPI?.spawnAtPx?.(worldX, worldY, { _ascii: def })
-                || window.Entities?.Fire?.createFireAtPx?.(worldX, worldY, { _ascii: def });
-              handled = !!entity;
-              break;
-            case 'water':
-              entity = window.Entities?.WaterPuddle?.spawnAtTile?.(tx, ty, { _ascii: def });
-              handled = !!entity;
-              break;
-            case 'pill':
-              entity = window.Entities?.Objects?.spawnPill?.(def?.subtype || def?.key || 'pill', worldX, worldY, { _ascii: def, placement: p })
-                || window.Entities?.Objects?.spawnPill?.(def?.subtype || 'pill', worldX, worldY, { _ascii: def, placement: p });
-              handled = !!entity;
-              break;
-            case 'phone':
-              entity = window.Entities?.Objects?.spawnPhone?.(worldX, worldY, { _ascii: def, placement: p });
-              handled = !!entity;
-              break;
-            case 'light_ok':
-            case 'light_broken':
-              entity = window.Entities?.Lights?.spawnFromAscii?.(tx, ty, def);
-              handled = !!entity;
-              break;
-            case 'bell':
-              entity = window.Entities?.Objects?.spawnBell?.(worldX, worldY, { _ascii: def, placement: p });
-              handled = !!entity;
-              break;
-            case 'bed':
-            case 'patient_bed':
-              entity = window.Entities?.Patients?.spawnBedFromAscii?.(tx, ty, def) || entity;
-              handled = handled || !!entity;
-              break;
-            case 'patient':
-            case 'furious_patient':
-            case 'patient_fury':
-              entity = window.Entities?.Patients?.spawnPatientFromAscii?.(tx, ty, def) || entity;
-              handled = handled || !!entity;
-              break;
-            default:
-              break;
-          }
-        }
-
-        if (!handled && spawnFromAscii && (def || ch)) {
-          entity = spawnFromAscii(def || ch, tx, ty, { G, map: G.map, char: ch, placement: p, x: worldX, y: worldY }, ch);
-          handled = !!entity;
-        }
-
-        if (!handled && def && spawnFromAscii) {
-          entity = spawnFromAscii(def, tx, ty, { G, map: G.map, char: ch, placement: p, x: worldX, y: worldY }, ch);
-          handled = !!entity;
-        }
-
-        if (!handled) {
-          const charLabel = p.char || ch || '?';
-          const kind = def?.kind || def?.key || type || p.type || p.kind || charLabel || '';
-          let spawnFailureReason = null;
-
-          try {
-            console.warn('[SPAWN_FALLBACK]', { char: charLabel, kind, grid: p.grid || { x: tx, y: ty }, world: { x: worldX, y: worldY }, reason: 'enter_fallback' });
-          } catch (_) {}
-
-          if (!entity && spawnFromAscii && def) {
-            try {
-              entity = spawnFromAscii(def, tx, ty, { G, map: G.map, char: charLabel, placement: p, x: worldX, y: worldY }, charLabel);
-            } catch (err) {
-              entity = null;
-              spawnFailureReason = spawnFailureReason || 'spawnFromAscii_error';
-              safeLogSpawnFallbackError('spawnFromAscii', err, { charLabel, kind, def, tx, ty, worldX, worldY });
+        const entity = spawnEntityFromAsciiSafe({
+          G,
+          map: G.map,
+          p,
+          ch,
+          def,
+          tx,
+          ty,
+          worldX,
+          worldY,
+          type,
+          spawnFromAscii,
+          heroSpawner: (x, y) => {
+            if ((type === 'player' || type === 'hero' || type === 'start' || type === 'hero_spawn') && !G.player) {
+              const hero = (typeof makePlayer === 'function')
+                ? makePlayer(x, y)
+                : (window.Entities?.Hero?.spawnPlayer?.(x, y, {}) || null);
+              if (hero && !G.player) {
+                G.player = hero;
+              }
+              return hero;
             }
+            return null;
           }
-
-          if (!entity && def?.factoryKey && window.Entities && typeof window.Entities.factory === 'function') {
-            try {
-              entity = window.Entities.factory(def.factoryKey, { tx, ty, x: worldX, y: worldY, _ascii: def });
-            } catch (err) {
-              entity = null;
-              spawnFailureReason = spawnFailureReason || 'factory_error';
-              safeLogSpawnFallbackError('Entities.factory', err, { charLabel, kind, def, tx, ty, worldX, worldY });
-            }
-          }
-
-          if (!entity) {
-            spawnFailureReason = spawnFailureReason || 'no_factory_or_unsupported';
-            entity = safeSpawnFallbackPlaceholder(charLabel, def || null, tx, ty, worldX, worldY, spawnFailureReason, p);
-          }
-
-          if (entity) { handled = true; }
-        }
-
+        });
         registerEntity(entity, def, p);
         if (entity) markCharSpawned(ch);
       }

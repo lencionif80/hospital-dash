@@ -22,7 +22,7 @@
   };
 
   if (!root.PlacementAPI) root.PlacementAPI = {};
-  root.PlacementAPI.spawnFallbackPlaceholder = function spawnFallbackPlaceholder(
+  root.PlacementAPI.spawnFallbackPlaceholder = function (
     charLabel,
     def,
     tx,
@@ -32,21 +32,29 @@
   ) {
     try {
       const T = root.TILE_SIZE || 32;
-      const worldX = (ctx && ctx.x) || (tx * T + T * 0.5);
-      const worldY = (ctx && ctx.y) || (ty * T + T * 0.5);
-      try {
-        if (root.AsciiLegend && typeof root.AsciiLegend.spawnFallbackPlaceholder === 'function') {
-          const res = root.AsciiLegend.spawnFallbackPlaceholder(charLabel, def, tx, ty, source, ctx);
-          if (res) return res;
-        }
-      } catch (_) {}
+      const worldX = (ctx && ctx.x) != null ? ctx.x : tx * T + T * 0.5;
+      const worldY = (ctx && ctx.y) != null ? ctx.y : ty * T + T * 0.5;
+
       if (typeof createSpawnDebugPlaceholderEntity === 'function') {
-        return createSpawnDebugPlaceholderEntity(charLabel || '?', worldX, worldY, def || null, (ctx && ctx.reason) || 'unknown');
+        return createSpawnDebugPlaceholderEntity(
+          charLabel || '?',
+          worldX,
+          worldY,
+          def || null,
+          { source }
+        );
       }
+
+      // Si aún no está disponible la función global, simplemente no hagas nada.
       return null;
     } catch (err) {
       try {
-        console.error && console.error('[SPAWN_FALLBACK_ERROR] PlacementAPI.spawnFallbackPlaceholder fatal', String((err && err.message) || err));
+        console.error('[SPAWN_FALLBACK_ERROR] PlacementAPI.spawnFallbackPlaceholder fatal', {
+          char: charLabel,
+          defKey: def && (def.key || def.kind || def.factoryKey),
+          source,
+          error: String((err && err.message) || err)
+        });
       } catch (_) {}
       return null;
     }
