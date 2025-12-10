@@ -107,75 +107,77 @@
   root.createSpawnDebugPlaceholderEntity =
     root.createSpawnDebugPlaceholderEntity || createSpawnDebugPlaceholderEntity;
 
-  root.PlacementAPI.spawnFallbackPlaceholder = function spawnFallbackPlaceholder(
-    asciiChar,
-    def,
-    tx,
-    ty,
-    failReason,
-    context
-  ) {
-    // Diagnóstico 2: los callers de NPC/enemy/world pasan autoRegister:false; con la
-    // implementación anterior el registro dependía de createSpawnDebugPlaceholderEntity.
-    try {
-      const G = (context && context.G) || root.G;
-      const map = (context && context.map) || (G && G.map) || null;
-      const T = root.TILE_SIZE || root.TILE || 32;
-
-      const worldX = (context && typeof context.x === 'number')
-        ? context.x
-        : tx * T + T * 0.5;
-      const worldY = (context && typeof context.y === 'number')
-        ? context.y
-        : ty * T + T * 0.5;
-
-      const placeholder = createSpawnDebugPlaceholderEntity(
-        asciiChar || '?',
-        worldX,
-        worldY,
-        def || null,
-        {
-          reason: failReason || 'unknown',
-          map,
-          tx,
-          ty,
-        }
-      );
-
-      const autoRegisterFlag =
-        !context || typeof context.autoRegister === 'undefined'
-          ? true
-          : context.autoRegister !== false;
-
-      if (autoRegisterFlag && G && Array.isArray(G.entities) && placeholder && !G.entities.includes(placeholder)) {
-        G.entities.push(placeholder);
-      }
-
+  if (!root.PlacementAPI.spawnFallbackPlaceholder) {
+    root.PlacementAPI.spawnFallbackPlaceholder = function spawnFallbackPlaceholder(
+      asciiChar,
+      def,
+      tx,
+      ty,
+      failReason,
+      context
+    ) {
+      // Diagnóstico 2: los callers de NPC/enemy/world pasan autoRegister:false; con la
+      // implementación anterior el registro dependía de createSpawnDebugPlaceholderEntity.
       try {
-        if (typeof console !== 'undefined' && console.warn) {
-          console.warn('[SPAWN_FALLBACK]', {
-            char: asciiChar,
-            kind: def && def.kind,
-            factoryKey: def && def.factoryKey,
+        const G = (context && context.G) || root.G;
+        const map = (context && context.map) || (G && G.map) || null;
+        const T = root.TILE_SIZE || root.T || 32;
+
+        const worldX = (context && typeof context.x === 'number')
+          ? context.x
+          : tx * T + T * 0.5;
+        const worldY = (context && typeof context.y === 'number')
+          ? context.y
+          : ty * T + T * 0.5;
+
+        const placeholder = createSpawnDebugPlaceholderEntity(
+          asciiChar || '?',
+          worldX,
+          worldY,
+          def || null,
+          {
+            reason: failReason || 'unknown',
+            map,
             tx,
             ty,
-            x: worldX,
-            y: worldY,
-            stage: (context && context.stage) || 'unknown',
-            error: (context && context.error) || null,
-            reason: failReason || null,
-          });
-        }
-      } catch (_) {}
+          }
+        );
 
-      return placeholder;
-    } catch (err) {
-      try {
-        console.error('[SPAWN_FALLBACK_FATAL]', err);
-      } catch (_) {}
-      return null;
-    }
-  };
+        const autoRegisterFlag =
+          !context || typeof context.autoRegister === 'undefined'
+            ? true
+            : context.autoRegister !== false;
+
+        if (autoRegisterFlag && G && Array.isArray(G.entities) && placeholder && !G.entities.includes(placeholder)) {
+          G.entities.push(placeholder);
+        }
+
+        try {
+          if (typeof console !== 'undefined' && console.warn) {
+            console.warn('[SPAWN_FALLBACK]', {
+              char: asciiChar,
+              kind: def && def.kind,
+              factoryKey: def && def.factoryKey,
+              tx,
+              ty,
+              x: worldX,
+              y: worldY,
+              stage: (context && context.stage) || 'unknown',
+              error: (context && context.error) || null,
+              reason: failReason || null,
+            });
+          }
+        } catch (_) {}
+
+        return placeholder;
+      } catch (err) {
+        try {
+          console.error('[SPAWN_FALLBACK_FATAL]', err);
+        } catch (_) {}
+        return null;
+      }
+    };
+  }
 
   Placement.shouldRun = function shouldRun(cfg){
     const G = cfg?.G || root.G;
@@ -1762,9 +1764,10 @@
       } catch (err) {
         failReason = err?.message || String(err);
       }
+      if (!npc && !failReason) failReason = 'NPC spawn returned null';
       if (!npc && root.PlacementAPI?.spawnFallbackPlaceholder) {
         const def = { kind: 'NPC', factoryKey: sub || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'NPC spawn failed', { G, map: cfg?.map });
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'NPC spawn failed', { G, map: cfg?.map, autoRegister: false });
         if (fallback) {
           fallback.group = fallback.group || 'human';
           ensureNPCVisuals(fallback);
@@ -1976,9 +1979,10 @@
       } catch (err) {
         failReason = err?.message || String(err);
       }
+      if (!entity && !failReason) failReason = 'Enemy spawn returned null';
       if (!entity && root.PlacementAPI?.spawnFallbackPlaceholder) {
         const def = { kind: subtype || type, factoryKey: subtype || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'Enemy spawn failed', { G, map: cfg?.map });
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'Enemy spawn failed', { G, map: cfg?.map, autoRegister: false });
         if (fallback) {
           if (!fallback.group) {
             if (subtype.includes('furious')) fallback.group = 'human';
@@ -2061,46 +2065,26 @@
           if (root.HazardsAPI?.spawnWet) {
             entity = root.HazardsAPI.spawnWet(tx, ty, entry || {});
           } else {
-            const size = TILE_SIZE() * 0.8;
-            entity = {
-              kind: 'HAZARD_WET',
-              x: world.x + (TILE_SIZE() - size) * 0.5,
-              y: world.y + (TILE_SIZE() - size) * 0.5,
-              w: size,
-              h: size,
-              solid: false,
-              dynamic: false,
-              pushable: false,
-              rigOk: false
-            };
+            failReason = 'HazardsAPI.spawnWet missing';
           }
         } else if (type === 'hazard_fire') {
           if (root.HazardsAPI?.spawnFire) {
             entity = root.HazardsAPI.spawnFire(tx, ty, entry || {});
           } else {
-            const size = TILE_SIZE() * 0.8;
-            entity = {
-              kind: 'HAZARD_FIRE',
-              x: world.x + (TILE_SIZE() - size) * 0.5,
-              y: world.y + (TILE_SIZE() - size) * 0.5,
-              w: size,
-              h: size,
-              solid: false,
-              dynamic: false,
-              pushable: false,
-              color: '#ff8a3c',
-              rigOk: false
-            };
+            failReason = 'HazardsAPI.spawnFire missing';
           }
         }
       } catch (err) {
         failReason = err?.message || String(err);
       }
+      if (!entity && !failReason) failReason = 'World object spawn returned null';
       if (!entity && root.PlacementAPI?.spawnFallbackPlaceholder) {
         const def = { kind: entry?.kind || type, factoryKey: entry?.factoryKey || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'World object spawn failed', { G, map: cfg?.map });
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'World object spawn failed', { G, map: cfg?.map, autoRegister: false });
         if (fallback) {
-          fallback.group = fallback.group || 'object';
+          if (!fallback.group) {
+            fallback.group = type.startsWith('hazard') ? 'hazard' : 'object';
+          }
           placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 6 });
           out.push(fallback);
         }
@@ -2108,7 +2092,7 @@
       }
       if (entity) {
         entity.rigOk = entity.rigOk === true || true;
-        if (!entity.group) entity.group = 'object';
+        if (!entity.group) entity.group = type.startsWith('hazard') ? 'hazard' : 'object';
         out.push(entity);
         try { root.EntityGroups?.assign?.(entity); } catch (_) {}
         try { root.EntityGroups?.register?.(entity, G); } catch (_) {}
