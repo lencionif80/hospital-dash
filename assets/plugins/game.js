@@ -1737,24 +1737,41 @@ function drawEntities(c2){
     if (e === G.player || e.kind === ENT.PLAYER) continue;
 
     if (e._debugSpawnPlaceholder) {
-      const cam = G && G.camera;
-      const screenX = cam ? (e.x - cam.x) : e.x;
-      const screenY = cam ? (e.y - cam.y) : e.y;
-      const halfW = e.w * 0.5;
-      const halfH = e.h * 0.5;
-      c2.save();
-      c2.translate(screenX, screenY);
-      c2.fillStyle = e._debugColor || '#ff3366';
-      c2.fillRect(-halfW, -halfH, e.w, e.h);
-      c2.strokeStyle = '#000';
-      c2.lineWidth = 2;
-      c2.strokeRect(-halfW, -halfH, e.w, e.h);
-      c2.fillStyle = '#fff';
-      c2.font = 'bold 14px monospace';
-      c2.textAlign = 'center';
-      c2.textBaseline = 'middle';
-      c2.fillText(e._debugChar || '?', 0, 0);
-      c2.restore();
+      if (typeof e.zIndex !== 'number') e.zIndex = 10; // encima del suelo, debajo del héroe
+
+      const ctx = c2 || window.G?.ctx || window.G?.ctxMain || window.G?.canvasCtx;
+      if (!ctx) continue;
+
+      const cam = G?.camera;
+      const colorMap = {
+        'p': '#ff4d4d',
+        'b': '#ffb347',
+        'g': '#66cc66',
+        'd': '#9999ff',
+        'E': '#66ccff',
+        '?': '#ff3366',
+      };
+      const screenX = (ctx === c2) ? e.x : (e.x - (cam?.x || 0));
+      const screenY = (ctx === c2) ? e.y : (e.y - (cam?.y || 0));
+      const halfW = (e.w || TILE) * 0.5;
+      const halfH = (e.h || TILE) * 0.5;
+      ctx.save();
+      ctx.translate(screenX, screenY);
+
+      ctx.fillStyle = colorMap[e._debugChar] || e._debugColor || '#ff3366';
+      ctx.fillRect(-halfW, -halfH, e.w || TILE, e.h || TILE);
+
+      ctx.strokeStyle = '#000';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(-halfW, -halfH, e.w || TILE, e.h || TILE);
+
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(e._debugChar || '?', 0, 0);
+
+      ctx.restore();
       continue;
     }
 
