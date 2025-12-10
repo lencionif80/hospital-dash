@@ -238,6 +238,40 @@
     drawEntity(ctx, e) {
       if (!e || e.dead) return;
 
+      if (e._debugSpawnPlaceholder || e.placeholder === true) {
+        const G = global.G || null;
+        const cam = G && G.camera;
+        const screenX = cam ? (e.x - cam.x) : e.x;
+        const screenY = cam ? (e.y - cam.y) : e.y;
+        const halfW = (e.w || (global.TILE_SIZE || 32)) * 0.5;
+        const halfH = (e.h || (global.TILE_SIZE || 32)) * 0.5;
+
+        const bg = e._debugColor || '#ff3366';
+        const fg = (typeof global.pickDebugTextColor === 'function')
+          ? global.pickDebugTextColor(bg)
+          : '#ffffff';
+
+        ctx.save();
+        ctx.translate(screenX, screenY);
+
+        ctx.fillStyle = bg;
+        ctx.globalAlpha = 0.95;
+        ctx.fillRect(-halfW, -halfH, halfW * 2, halfH * 2);
+
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(-halfW, -halfH, halfW * 2, halfH * 2);
+
+        ctx.fillStyle = fg;
+        ctx.font = 'bold 18px monospace';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(e._debugChar || '?', 0, 0);
+
+        ctx.restore();
+        return;
+      }
+
       const rawKey = this._keyForEntity(e) || '';
       const key = this._normalizeKey(rawKey);
       const img = this._imgs[key];

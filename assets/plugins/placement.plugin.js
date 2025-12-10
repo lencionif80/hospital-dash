@@ -30,27 +30,57 @@
     source,
     ctx
   ) {
+    const asciiChar = charLabel || def?.char || def?.key || ctx?.char || '?';
+    const reason = ctx?.reason || source || 'spawnFallback';
+    const stage = ctx?.stage || source || 'placement.spawnFallbackPlaceholder';
+    const error = ctx?.error || null;
+    const T = root.TILE_SIZE || root.TILE || 32;
+    const worldX = (ctx && ctx.x) != null ? ctx.x : tx * T + T * 0.5;
+    const worldY = (ctx && ctx.y) != null ? ctx.y : ty * T + T * 0.5;
     try {
-      const T = root.TILE_SIZE || 32;
-      const worldX = (ctx && ctx.x) != null ? ctx.x : tx * T + T * 0.5;
-      const worldY = (ctx && ctx.y) != null ? ctx.y : ty * T + T * 0.5;
-
+      if (typeof console !== 'undefined' && console.error) {
+        console.error('[SPAWN_FALLBACK]', {
+          char: asciiChar,
+          kind: def?.kind,
+          factoryKey: def?.factoryKey,
+          x: tx,
+          y: ty,
+          reason,
+          stage,
+          error: error ? String(error) : null
+        });
+      }
+    } catch (_) {}
+    try {
+      if (typeof registerSpawnFallback === 'function') {
+        registerSpawnFallback({
+          char: asciiChar,
+          kind: def?.kind || def?.key || null,
+          factoryKey: def?.factoryKey || null,
+          grid: { x: tx, y: ty },
+          world: { x: worldX, y: worldY },
+          stage,
+          reason,
+          error: error ? String(error?.message || error) : null
+        });
+      }
+    } catch (_) {}
+    try {
       if (typeof createSpawnDebugPlaceholderEntity === 'function') {
         return createSpawnDebugPlaceholderEntity(
-          charLabel || '?',
-          worldX,
-          worldY,
+          asciiChar,
           def || null,
-          { source }
+          tx,
+          ty,
+          reason,
+          ctx || {}
         );
       }
-
-      // Si aún no está disponible la función global, simplemente no hagas nada.
       return null;
     } catch (err) {
       try {
         console.error('[SPAWN_FALLBACK_ERROR] PlacementAPI.spawnFallbackPlaceholder fatal', {
-          char: charLabel,
+          char: asciiChar,
           defKey: def && (def.key || def.kind || def.factoryKey),
           source,
           error: String((err && err.message) || err)
