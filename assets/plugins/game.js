@@ -27,6 +27,7 @@
     BOSS: 9,
     DOOR_NORMAL: 'door_normal',
     DOOR_URGENT: 'door_urgent',
+    ELEVATOR: 'elevator',
   };
 
   const COLORS = {
@@ -889,6 +890,9 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
     G.lights.length = 0;
     G.roomLights.length = 0;
 
+    // Limpia ascensores previos antes de recrear el mapa
+    try { window.Entities?.Elevator?.reset?.(); } catch (_) {}
+
     // === Constantes / fallback ===
     // Importante: NO redefinimos el TILE del motor aquí (evita la TDZ).
     // Usamos el valor global expuesto por el motor: window.TILE_SIZE (o window.TILE como compat),
@@ -978,6 +982,8 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
     // Guarda referencia global para applyPlacementsFromMapgen
     G.__asciiPlacements = asciiPlacements;
 
+    const elevatorRefs = [];
+
     for (let y = 0; y < G.mapH; y++){
       const row = [];
       const colorRow = [];
@@ -995,6 +1001,19 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
         if (!def) continue;
         if (def.kind === 'wall' || def.kind === 'void') continue;
         if (def.baseKind === 'floor' || def.kind === 'floor') continue;
+
+        if (def.kind === ENT.ELEVATOR || def.factoryKey === ENT.ELEVATOR || ch === 'E') {
+          const wx = x * TILE + TILE * 0.5;
+          const wy = y * TILE + TILE * 0.5;
+          const elev = window.Entities?.Elevator?.create?.(wx, wy, { tx: x, ty: y })
+            || window.createElevator?.(wx, wy, { tx: x, ty: y })
+            || null;
+          if (elev) {
+            addEntity(elev);
+            elevatorRefs.push(elev);
+            continue;
+          }
+        }
 
         const entity = spawnFromKind(def, x, y, ch);
         if (entity) {
@@ -1023,6 +1042,26 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
       }
       G.map.push(row);
       G.floorColors.push(colorRow);
+    }
+
+    // Emparejar ascensores de dos en dos una vez parseado el mapa
+    if (elevatorRefs.length > 0) {
+      if (elevatorRefs.length % 2 !== 0 && window.DEBUG_ELEVATOR) {
+        try { console.warn('[Elevator] Número impar de ascensores en mapa', elevatorRefs.length); } catch (_) {}
+      }
+      for (let i = 0; i + 1 < elevatorRefs.length; i += 2) {
+        const a = elevatorRefs[i];
+        const b = elevatorRefs[i + 1];
+        if (!a || !b) continue;
+        const pairIndex = (i / 2) | 0;
+        a.pairId = pairIndex;
+        b.pairId = pairIndex;
+        a.pairedElevator = b;
+        b.pairedElevator = a;
+        if (window.DEBUG_ELEVATOR) {
+          try { console.log(`[Elevator] Pair #${pairIndex}: ${a.id} <-> ${b.id}`); } catch (_) {}
+        }
+      }
     }
 
     // Mezclamos con placements del generador (si ya existían)

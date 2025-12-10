@@ -6,6 +6,7 @@
   const ENT = root.ENT || (root.ENT = {});
   if (!ENT.DOOR_NORMAL) ENT.DOOR_NORMAL = 'door_normal';
   if (!ENT.DOOR_URGENT) ENT.DOOR_URGENT = 'door_urgent';
+  if (!ENT.ELEVATOR) ENT.ELEVATOR = 'elevator';
 
   // Tabla ASCII centralizada y única. Los caracteres oficiales son:
   //   Terreno: '#' muro, '.' suelo, '-' control, ';' boss, ',' miniboss, ' ' vacío
@@ -97,7 +98,7 @@
     'v': { key: 'npc_familiar',    kind: 'familiar',      factoryKey: 'npc_familiar_molesto', isNPC: true },
 
     // Ascensor
-    'E': { key: 'elevator',       kind: 'elevator',       factoryKey: 'elevator_tile' },
+    'E': { key: ENT.ELEVATOR,       kind: ENT.ELEVATOR,       factoryKey: ENT.ELEVATOR },
 
     // Agua / charco
     '~': { key: 'water',          kind: 'water',          factoryKey: 'water_tile', isWater: true },
