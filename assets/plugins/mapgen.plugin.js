@@ -1001,6 +1001,65 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
     return vis;
   }
 
+  function analyzeConnectivity(ascii, start, cs){
+    const H = ascii.length, W = ascii[0].length;
+    const compId = Array.from({length:H},()=>Array(W).fill(-1));
+    const sizes = [];
+    const reps = [];
+    let totalWalkable = 0;
+    let startComponent = -1;
+    let nextId = 0;
+
+    const inb = (x,y)=> y>=0 && y<H && x>=0 && x<W;
+    const isWalk = (x,y)=> inb(x,y) && isWalkableChar(ascii[y][x], cs);
+
+    for (let y=0;y<H;y++){
+      for (let x=0;x<W;x++){
+        if (!isWalk(x,y) || compId[y][x] !== -1) continue;
+        const id = nextId++;
+        const q = [[x,y]];
+        compId[y][x] = id;
+        let size = 0;
+        let rep = { x, y };
+        while(q.length){
+          const [cx, cy] = q.shift();
+          size++;
+          totalWalkable++;
+          if (cx === start?.x && cy === start?.y) startComponent = id;
+          for (const [dx,dy] of N4){
+            const nx=cx+dx, ny=cy+dy;
+            if (!isWalk(nx, ny) || compId[ny][nx] !== -1) continue;
+            compId[ny][nx] = id;
+            q.push([nx, ny]);
+          }
+        }
+        sizes.push(size);
+        reps.push(rep);
+      }
+    }
+
+    const mainIdx = startComponent >= 0 ? startComponent : sizes.indexOf(Math.max(...sizes, 0));
+    const mainSize = mainIdx >= 0 ? sizes[mainIdx] : 0;
+    const disconnectedTiles = Math.max(0, totalWalkable - mainSize);
+    const mainReachable = Array.from({length:H},()=>Array(W).fill(false));
+    for (let y=0;y<H;y++){
+      for (let x=0;x<W;x++){
+        if (compId[y][x] === mainIdx) mainReachable[y][x] = true;
+      }
+    }
+
+    return {
+      components: sizes.length,
+      totalWalkable,
+      mainSize,
+      disconnectedTiles,
+      mainReachable,
+      componentGrid: compId,
+      representatives: reps,
+      mainIndex: mainIdx
+    };
+  }
+
   function findRoomWalkableTile(ascii, room, cs, avoid=new Set()){
     const cx = room.centerX|0, cy = room.centerY|0;
     const coords = [];
@@ -1199,6 +1258,7 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
 
     const allRooms = asciiRows._rooms || [];
     const reachGrid = asciiRows._reachable || null;
+    const connectivity = asciiRows._connectivity || null;
     const allReachable = allRooms.every(r => reachGrid?.[r.centerY]?.[r.centerX]);
     const bossReachable = asciiRows._boss ? !!reachGrid?.[asciiRows._boss.centerY]?.[asciiRows._boss.centerX] : false;
     const numericMap = asciiToNumeric(asciiRows);
@@ -1235,7 +1295,10 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       floorPercent,
       occupancyTarget,
       occupancyAchieved,
-      mode
+      mode,
+      components: connectivity?.components ?? 0,
+      disconnectedTiles: connectivity?.disconnectedTiles ?? 0,
+      disconnectedRooms: connectivity?.disconnectedRooms ?? 0
     };
 
     const result = {
@@ -1262,6 +1325,10 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
         generation
       }
     };
+
+    try {
+      console.log('[MAPGEN_SUMMARY]', generation);
+    } catch (_) {}
 
     try {
       const G = W.G || (W.G = {});
@@ -1592,6 +1659,18 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
     linkRooms(graph, roomA, roomB);
   }
 
+  function pickClosestRoom(candidates, target){
+    let best = null;
+    let bestD2 = Infinity;
+    for (const r of candidates){
+      const dx = r.centerX - target.centerX;
+      const dy = r.centerY - target.centerY;
+      const d2 = dx*dx + dy*dy;
+      if (d2 < bestD2){ bestD2 = d2; best = r; }
+    }
+    return best;
+  }
+
   function connectRoomsWithMST(ascii, rooms, corridorWidth, rng, cs, opts){
     if (!rooms.length) return;
     const { graph=null, avoid=null } = opts || {};
@@ -1615,6 +1694,56 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       connected.push(bestPair.to);
       remaining.splice(remaining.indexOf(bestPair.to), 1);
     }
+  }
+
+  function connectLooseComponents(ascii, rooms, corridorWidth, rng, cs, graph, start){
+    const maxPasses = 4;
+    let summary = analyzeConnectivity(ascii, start, cs);
+    let passes = 0;
+
+    while (summary.components > 1 && passes < maxPasses){
+      const mainReachable = summary.mainReachable || [];
+      const mainRooms = rooms.filter(r=>mainReachable[r.centerY]?.[r.centerX]);
+      const anchorRoom = mainRooms[0] || rooms[0];
+      const anchorPoint = anchorRoom ? { x: anchorRoom.centerX|0, y: anchorRoom.centerY|0 } : (start || summary.representatives[summary.mainIndex] || { x:0, y:0 });
+
+      const handled = new Set();
+      const unreachableRooms = rooms.filter(r=>!mainReachable[r.centerY]?.[r.centerX]);
+
+      for (const target of unreachableRooms){
+        const compId = summary.componentGrid[target.centerY]?.[target.centerX];
+        if (compId === undefined || compId === null || handled.has(compId)) continue;
+        const baseRoom = pickClosestRoom(mainRooms, target) || anchorRoom;
+        if (baseRoom){
+          connectRoomPair(ascii, baseRoom, target, corridorWidth, rng, cs, rooms, graph);
+        } else {
+          const rep = summary.representatives[compId] || { x: target.centerX|0, y: target.centerY|0 };
+          carveCorridor(ascii, rep, anchorPoint, corridorWidth, rng, cs);
+        }
+        handled.add(compId);
+      }
+
+      // Conectar componentes sin sala asociada (pasillos sueltos)
+      for (let comp=0; comp<summary.components; comp++){
+        if (comp === summary.mainIndex || handled.has(comp)) continue;
+        const rep = summary.representatives[comp] || anchorPoint;
+        carveCorridor(ascii, rep, anchorPoint, corridorWidth, rng, cs);
+      }
+
+      summary = analyzeConnectivity(ascii, anchorPoint, cs);
+      passes++;
+    }
+
+    try {
+      console.log('[MAPGEN_CONNECTIVITY]', {
+        components: summary.components,
+        mainSize: summary.mainSize,
+        totalWalkable: summary.totalWalkable,
+        disconnectedTiles: summary.disconnectedTiles
+      });
+    } catch (_) {}
+
+    return summary;
   }
 
   function computeOccupancy(ascii, cs){
@@ -2031,9 +2160,14 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       }
       // Relleno para alcanzar densidad objetivo sin crear islas vacías
       densifyMap(ascii, rooms, occupancyTarget, corridorWidth, rng, cs);
-      const reachable = floodAscii(ascii, control.centerX|0, control.centerY|0, cs);
-      const numericCheck = asciiToNumeric(ascii);
       const startTile = findRoomWalkableTile(ascii, control, cs) || { x: control.centerX|0, y: control.centerY|0 };
+      const connectivity = connectLooseComponents(ascii, rooms, corridorWidth, rng, cs, roomGraph, startTile);
+      if (connectivity.components > 1){
+        try { console.warn('[MAPGEN_RETRY]', { reason: 'connectivity', components: connectivity.components }); } catch (_) {}
+        continue;
+      }
+      const reachable = connectivity.mainReachable || floodAscii(ascii, control.centerX|0, control.centerY|0, cs);
+      const numericCheck = asciiToNumeric(ascii);
       const bossTile = findRoomWalkableTile(ascii, boss, cs) || { x: boss.centerX|0, y: boss.centerY|0 };
       // Validación de flujo: el mini-boss debe ser cuello de botella hacia el boss
       const miniGateOk = miniBoss ? allBossPathsGoThroughMini(numericCheck, startTile, bossTile, miniBoss) : true;
@@ -2107,6 +2241,14 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
 
       sealMapBorder(ascii, cs);
 
+      const disconnectedRooms = rooms.filter(r=>!reachable?.[r.centerY]?.[r.centerX]).length;
+      const connectivitySummary = {
+        components: connectivity?.components ?? 0,
+        disconnectedRooms,
+        disconnectedTiles: connectivity?.disconnectedTiles ?? 0,
+        totalWalkable: connectivity?.totalWalkable ?? 0
+      };
+
       ascii._rooms = rooms;
       ascii._control = control;
       ascii._boss = boss;
@@ -2117,6 +2259,7 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       ascii._roomsGenerated = rooms.length;
       ascii._occupancy = occupancyData;
       ascii._occupancyTarget = occupancyTarget;
+      ascii._connectivity = connectivitySummary;
       return ascii;
     }
 
