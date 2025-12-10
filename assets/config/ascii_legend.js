@@ -151,117 +151,22 @@
   const PlacementAPI = root.PlacementAPI;
   const AsciiLegendAPI = root.AsciiLegendAPI;
 
-  const FALLBACK_COLORS = {
-    'p': '#ff9800', // patient
-    'b': '#f44336', // boss
-    'g': '#4caf50', // guard
-    'd': '#3f51b5', // door
-    'r': '#9e9e9e', // rat / random
-    'm': '#00bcd4', // mosquito
-    'x': '#ff5722', // fire
-    'u': '#607d8b', // urgencias / boss door
-    't': '#cddc39', // tcae / staff
-    'c': '#6d4c41', // cart / celador
-    'y': '#7e57c2', // food
-    '?': '#ff3366'
+  root.pickDebugColorForChar = root.pickDebugColorForChar;
+  root.invertColorForText = root.invertColorForText || function invertColorForText(hex) {
+    try {
+      const m = /^#?([0-9a-f]{6})$/i.exec(hex || '');
+      if (!m) return '#ffffff';
+      const int = parseInt(m[1], 16);
+      const r = (int >> 16) & 0xff;
+      const g = (int >> 8) & 0xff;
+      const b = int & 0xff;
+      const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+      return lum > 140 ? '#111111' : '#ffffff';
+    } catch (_) { return '#ffffff'; }
   };
-
-  function pickDebugColorForPlaceholder(asciiChar, def) {
-    if (def?.tint) {
-      const tintKey = String(def.tint).toLowerCase();
-      const tintValue = TINT_COLORS[tintKey];
-      if (typeof tintValue === 'number') {
-        return '#' + tintValue.toString(16).padStart(6, '0');
-      }
-    }
-    if (def?.color) return def.color;
-    if (def?.debugColor) return def.debugColor;
-
-    const ch = (asciiChar || def?.char || def?.key || '?');
-    if (FALLBACK_COLORS[ch]) return FALLBACK_COLORS[ch];
-    return FALLBACK_COLORS['?'];
-  }
-
-  function pickDebugTextColor(bgColor){
-    if (!bgColor || typeof bgColor !== 'string') return '#ffffff';
-    const hex = bgColor.replace('#','');
-    const num = hex.length === 3
-      ? hex.split('').map(h => h + h).join('')
-      : hex.padStart(6, '0').slice(0,6);
-    const r = parseInt(num.slice(0,2), 16) || 0;
-    const g = parseInt(num.slice(2,4), 16) || 0;
-    const b = parseInt(num.slice(4,6), 16) || 0;
-    const lum = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-    return lum > 140 ? '#111111' : '#ffffff';
-  }
-
-  function createSpawnDebugPlaceholderEntity(asciiChar, def, tx, ty, reason, context) {
-    const T = root.TILE_SIZE || 32;
-    const worldX = tx * T + T * 0.5;
-    const worldY = ty * T + T * 0.5;
-
-    const color = (typeof pickDebugColorForPlaceholder === 'function')
-      ? pickDebugColorForPlaceholder(asciiChar, def)
-      : '#ff3366';
-    const textColor = (typeof pickDebugTextColor === 'function')
-      ? pickDebugTextColor(color)
-      : '#ffffff';
-
-    const e = {
-      id: typeof genId === 'function'
-        ? genId()
-        : 'fallback-' + Math.random().toString(36).slice(2),
-      kind: 'DEBUG_PLACEHOLDER',
-      role: 'debug_placeholder',
-      populationType: 'none',
-
-      x: worldX,
-      y: worldY,
-      w: T,
-      h: T,
-      grid: { x: tx, y: ty },
-
-      vx: 0,
-      vy: 0,
-      dir: 0,
-
-      solid: false,
-      collisionLayer: 'default',
-      collisionMask: 'default',
-
-      _debugSpawnPlaceholder: true,
-      _debugChar: asciiChar || '?',
-      _debugColor: color,
-      _debugTextColor: textColor,
-      _debugReason: reason || '',
-      _debugDef: def || null,
-
-      aiUpdate: function () {},
-      physicsUpdate: function () {},
-      onDamage: function () {},
-      onDeath: function () {},
-      onEnterTile: null,
-      onLeaveTile: null,
-      onInteract: null,
-
-      puppet: null,
-      rigOk: false,
-      removeMe: false,
-      _culled: false,
-      placeholder: true
-    };
-
-    const game = (context && context.G) || root.G;
-    if (game && Array.isArray(game.entities) && !game.entities.includes(e)) {
-      game.entities.push(e);
-    }
-
-    return e;
-  }
-
-  root.pickDebugColorForPlaceholder = root.pickDebugColorForPlaceholder || pickDebugColorForPlaceholder;
-  root.pickDebugTextColor = root.pickDebugTextColor || pickDebugTextColor;
-  root.createSpawnDebugPlaceholderEntity = root.createSpawnDebugPlaceholderEntity || createSpawnDebugPlaceholderEntity;
+  // La implementación canónica de createSpawnDebugPlaceholderEntity vive en placement.plugin.js
+  // para que controle el registro y el aspecto de forma centralizada.
+  root.createSpawnDebugPlaceholderEntity = root.createSpawnDebugPlaceholderEntity;
 
   PlacementAPI.getDefFromChar = function getDefFromChar(ch, opts = {}) {
     return getLegendDef(ch, opts);
@@ -364,55 +269,9 @@
     return { x: tx * tile, y: ty * tile, tile };
   }
 
-  PlacementAPI.spawnFallbackPlaceholder = function spawnFallbackPlaceholder(charLabel, def, tx, ty, source, ctx = {}) {
-    const world = gridToWorld(tx, ty);
-    const asciiChar = charLabel || def?.char || def?.key || ctx?.char || '?';
-    ensureFloorAt(ctx.map || ctx.G, tx, ty);
-    const reason = ctx?.reason || source || 'spawnFallback';
-    const stage = ctx?.stage || source || 'ascii_legend.spawnFallbackPlaceholder';
-    const error = ctx?.error || null;
-
-    if (typeof console !== 'undefined' && console.error) {
-      try {
-        console.error('[SPAWN_FALLBACK]', {
-          char: asciiChar,
-          kind: def?.kind,
-          factoryKey: def?.factoryKey,
-          x: tx,
-          y: ty,
-          reason,
-          stage,
-          error: error ? String(error) : null
-        });
-      } catch (_) {}
-    }
-
-    try {
-      if (typeof registerSpawnFallback === 'function') {
-        registerSpawnFallback({
-          char: asciiChar,
-          kind: def?.kind || def?.key || null,
-          factoryKey: def?.factoryKey || null,
-          grid: { x: tx, y: ty },
-          world: { x: world.x + (world.tile * 0.5), y: world.y + (world.tile * 0.5) },
-          stage,
-          reason,
-          error: error ? String(error?.message || error) : null
-        });
-      }
-    } catch (_) {}
-
-    const placeholder = (typeof createSpawnDebugPlaceholderEntity === 'function')
-      ? createSpawnDebugPlaceholderEntity(asciiChar, def || null, tx, ty, reason, { ...ctx, G: ctx.G || root.G })
-      : null;
-
-    if (placeholder) {
-      placeholder._debugStage = stage;
-      placeholder._debugReason = reason;
-    }
-
-    return placeholder;
-  };
+  // Diagnóstico: esta copia de spawnFallbackPlaceholder duplicaba la lógica y registraba por
+  // console.error; delegamos en la versión canónica de placement.plugin.js.
+  PlacementAPI.spawnFallbackPlaceholder = PlacementAPI.spawnFallbackPlaceholder;
 
   root.AsciiLegend.spawnFallbackPlaceholder = PlacementAPI.spawnFallbackPlaceholder;
 

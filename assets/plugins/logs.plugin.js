@@ -646,10 +646,18 @@
       try { record('warn', args, { source: 'console.warn' }); } catch (err) { try { originalConsole?.error?.('[LOGS_PLUGIN_ERROR] console.warn', err); } catch (_) {} }
       try { sendConsoleExport('warn', args, { source: 'console.warn' }); } catch (_) {}
     };
-    console.error = function (...args) {
-      try { originalConsole.error(...args); } catch (_) {}
+    console.error = function patchedConsoleError(...args) {
+      try {
+        if (args && typeof args[0] === 'string' && args[0].indexOf('[SPAWN_FALLBACK]') === 0) {
+          try { record('warn', args, { source: 'spawn_fallback' }); } catch (_) {}
+          try { originalConsole.warn.apply(console, args); } catch (_) {}
+          return;
+        }
+      } catch (_) {}
+
       try { record('error', args, { source: 'console.error' }); } catch (err) { try { originalConsole?.error?.('[LOGS_PLUGIN_ERROR] console.error', err); } catch (_) {} }
       try { sendConsoleExport('error', args, { source: 'console.error' }); } catch (_) {}
+      try { originalConsole.error(...args); } catch (_) {}
     };
   }
 
