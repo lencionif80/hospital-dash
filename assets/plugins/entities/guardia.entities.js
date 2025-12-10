@@ -175,7 +175,8 @@
         }
       }
     };
-    try { PuppetAPI?.attach?.(bullet, bullet.puppet); } catch (_) { bullet.rigOk = false; }
+    if (W.safeAttachRig) W.safeAttachRig(bullet, bullet.puppet, 'guardia.bullet');
+    else try { PuppetAPI?.attach?.(bullet, bullet.puppet); } catch (_) { bullet.rigOk = false; }
     G.entities.push(bullet);
     G.movers?.push?.(bullet);
     if (DEBUG_GUARD) console.log('[GUARD] shot bullet', bullet.id);
@@ -281,7 +282,8 @@
       onFire: guardOnFire,
     };
 
-    try { PuppetAPI?.attach?.(e, e.puppet); } catch (_) { e.rigOk = false; }
+    if (W.safeAttachRig) W.safeAttachRig(e, e.puppet, 'guardia');
+    else try { PuppetAPI?.attach?.(e, e.puppet); } catch (_) { e.rigOk = false; }
     G.entities.push(e);
     G.npcs.push(e);
     if (DEBUG_GUARD) console.log('[GUARD] spawned at', e.x, e.y);

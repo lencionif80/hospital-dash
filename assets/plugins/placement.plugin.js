@@ -31,6 +31,9 @@
     ctx
   ){
     try {
+      if (root.AsciiLegend && typeof root.AsciiLegend.spawnFallbackPlaceholder === 'function') {
+        return root.AsciiLegend.spawnFallbackPlaceholder(charLabel, def, tx, ty, source, ctx);
+      }
       const T = root.TILE_SIZE || 32;
       const worldX = (ctx && ctx.x) || (tx * T + T * 0.5);
       const worldY = (ctx && ctx.y) || (ty * T + T * 0.5);
@@ -67,6 +70,32 @@
     G._lastLevelCfg = cfg;
     Placement._counts = {};
 
+    function logSpawnPipelineError(stage, err, entity) {
+      const msg = String((err && err.message) || err);
+      try {
+        console.error('[SPAWN_PIPELINE_ERROR]', stage, {
+          kind: entity && entity.kind,
+          role: entity && entity.role,
+          char: entity && entity._debugChar,
+          msg,
+        });
+      } catch (_) {}
+
+      try {
+        if (typeof registerSpawnFallback === 'function') {
+          registerSpawnFallback({
+            char: entity && entity._debugChar || null,
+            kind: entity && entity.kind || null,
+            grid: entity && entity.grid || null,
+            world: entity ? { x: entity.x, y: entity.y } : null,
+            stage,
+            reason: 'pipeline_error',
+            error: msg,
+          });
+        }
+      } catch (_) {}
+    }
+
     const add = (entity) => {
       if (!entity) return;
       ensureGameCollections(G);
@@ -78,11 +107,11 @@
           G.movers.push(entity);
         }
       }
-      try { root.EntityGroups?.assign?.(entity); } catch (_) {}
-      try { root.EntityGroups?.register?.(entity, G); } catch (_) {}
+      try { root.EntityGroups?.assign?.(entity); } catch (err) { logSpawnPipelineError('EntityGroups.assign', err, entity); }
+      try { root.EntityGroups?.register?.(entity, G); } catch (err) { logSpawnPipelineError('EntityGroups.register', err, entity); }
       const kindKey = resolveKind(entity);
       Placement._counts[kindKey] = (Placement._counts[kindKey] || 0) + 1;
-      try { root.AI?.register?.(entity); } catch (_) {}
+      try { root.AI?.register?.(entity); } catch (err) { logSpawnPipelineError('AI.register', err, entity); }
       return entity;
     };
 
