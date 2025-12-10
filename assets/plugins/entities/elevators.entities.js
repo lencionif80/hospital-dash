@@ -19,10 +19,6 @@
 
   const elevators = [];
 
-  function resetList() {
-    elevators.length = 0;
-  }
-
   function overlap(a, b) {
     if (!a || !b) return false;
     const ax1 = a.x - (a.w || 0) * 0.5;
@@ -118,7 +114,6 @@
 
   function teleportEntity(src, dst, ent) {
     if (!dst || !ent) return;
-    // Teletransporte instantáneo manteniendo centro y pequeño offset vertical
     ent.x = dst.x;
     ent.y = dst.y + 2; // pequeño offset para evitar reactivación inmediata
     if (ent === G.player) {
@@ -232,7 +227,6 @@
     update,
     travel,
     forceActivate,
-    reset: resetList,
     list: elevators,
     create: createElevator,
   };

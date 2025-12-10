@@ -25,9 +25,6 @@
     MOSQUITO: 7,
     DOOR: 8,
     BOSS: 9,
-    DOOR_NORMAL: 'door_normal',
-    DOOR_URGENT: 'door_urgent',
-    ELEVATOR: 'elevator',
   };
 
   const COLORS = {
@@ -890,9 +887,6 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
     G.lights.length = 0;
     G.roomLights.length = 0;
 
-    // Limpia ascensores previos antes de recrear el mapa
-    try { window.Entities?.Elevator?.reset?.(); } catch (_) {}
-
     // === Constantes / fallback ===
     // Importante: NO redefinimos el TILE del motor aquí (evita la TDZ).
     // Usamos el valor global expuesto por el motor: window.TILE_SIZE (o window.TILE como compat),
@@ -923,9 +917,7 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
           G.roomLights.push({ x: (p.x || wx) + TILE / 2, y: (p.y || wy) + TILE / 2, r: 5.5 * TILE, baseA: 0.28 });
         }
         return p;
-      },
-      [ENT.DOOR_NORMAL]: (tx, ty) => window.Entities?.Doors?.spawnNormalDoor?.(undefined, undefined, { tx, ty }),
-      [ENT.DOOR_URGENT]: (tx, ty) => window.Entities?.Doors?.spawnUrgentDoor?.(undefined, undefined, { tx, ty })
+      }
     };
 
     const spawnFromKind = (def, tx, ty, ch) => {
@@ -982,8 +974,6 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
     // Guarda referencia global para applyPlacementsFromMapgen
     G.__asciiPlacements = asciiPlacements;
 
-    const elevatorRefs = [];
-
     for (let y = 0; y < G.mapH; y++){
       const row = [];
       const colorRow = [];
@@ -1001,19 +991,6 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
         if (!def) continue;
         if (def.kind === 'wall' || def.kind === 'void') continue;
         if (def.baseKind === 'floor' || def.kind === 'floor') continue;
-
-        if (def.kind === ENT.ELEVATOR || def.factoryKey === ENT.ELEVATOR || ch === 'E') {
-          const wx = x * TILE + TILE * 0.5;
-          const wy = y * TILE + TILE * 0.5;
-          const elev = window.Entities?.Elevator?.create?.(wx, wy, { tx: x, ty: y })
-            || window.createElevator?.(wx, wy, { tx: x, ty: y })
-            || null;
-          if (elev) {
-            addEntity(elev);
-            elevatorRefs.push(elev);
-            continue;
-          }
-        }
 
         const entity = spawnFromKind(def, x, y, ch);
         if (entity) {
@@ -1042,26 +1019,6 @@ let ASCII_MAP = DEFAULT_ASCII_MAP.slice();
       }
       G.map.push(row);
       G.floorColors.push(colorRow);
-    }
-
-    // Emparejar ascensores de dos en dos una vez parseado el mapa
-    if (elevatorRefs.length > 0) {
-      if (elevatorRefs.length % 2 !== 0 && window.DEBUG_ELEVATOR) {
-        try { console.warn('[Elevator] Número impar de ascensores en mapa', elevatorRefs.length); } catch (_) {}
-      }
-      for (let i = 0; i + 1 < elevatorRefs.length; i += 2) {
-        const a = elevatorRefs[i];
-        const b = elevatorRefs[i + 1];
-        if (!a || !b) continue;
-        const pairIndex = (i / 2) | 0;
-        a.pairId = pairIndex;
-        b.pairId = pairIndex;
-        a.pairedElevator = b;
-        b.pairedElevator = a;
-        if (window.DEBUG_ELEVATOR) {
-          try { console.log(`[Elevator] Pair #${pairIndex}: ${a.id} <-> ${b.id}`); } catch (_) {}
-        }
-      }
     }
 
     // Mezclamos con placements del generador (si ya existían)
@@ -1728,8 +1685,6 @@ function updateEntities(dt){
     updateEntities(dt);
     // ascensores
     Entities?.Elevator?.update?.(dt);
-    // puertas (usan IA propia y comparten capa visual con el héroe)
-    window.Entities?.Doors?.updateAllDoors?.(dt);
 
     if (window.MouseNav && window._mouseNavInited) MouseNav.update(dt);
 
@@ -2177,13 +2132,12 @@ function drawEntities(c2){
       }
 
       const table = {
-        'p': '#ff9800',
-        'b': '#e91e63',
-        'g': '#4caf50',
-        'i': '#03a9f4',
-        'd': '#795548',
-        'E': '#9c27b0',
-        'H': '#3f51b5'
+        'p': '#ff7f32',
+        'b': '#ff4d4d',
+        'g': '#3cb371',
+        'd': '#6699ff',
+        'E': '#66ccff',
+        '#': '#ff3366',
       };
 
       if (palette[charLabel]) return palette[charLabel];
@@ -2199,16 +2153,43 @@ function drawEntities(c2){
 
   function pickDebugTextColorForBackground(bg){
     try {
-      let hex = String(bg || '').trim();
-      if (hex[0] === '#') hex = hex.slice(1);
-      if (hex.length === 3) {
-        hex = hex.split('').map(c => c + c).join('');
-      }
-      if (hex.length !== 6) return '#ffffff';
+      if (typeof bg !== 'string') return '#ffffff';
+      const str = bg.trim().toLowerCase();
 
-      const r = parseInt(hex.slice(0, 2), 16);
-      const g = parseInt(hex.slice(2, 4), 16);
-      const b = parseInt(hex.slice(4, 6), 16);
+      const parseHex = (hex) => {
+        const clean = hex.replace('#', '');
+        return clean.length === 3
+          ? clean.split('').map((c) => parseInt(c + c, 16))
+          : [clean.slice(0,2), clean.slice(2,4), clean.slice(4,6)].map((c) => parseInt(c, 16));
+      };
+
+      const hslToRgb = (h, s, l) => {
+        const _s = s / 100;
+        const _l = l / 100;
+        const c = (1 - Math.abs(2 * _l - 1)) * _s;
+        const x = c * (1 - Math.abs(((h / 60) % 2) - 1));
+        const m = _l - c / 2;
+        let r = 0, g = 0, b = 0;
+        if (0 <= h && h < 60) { r = c; g = x; b = 0; }
+        else if (60 <= h && h < 120) { r = x; g = c; b = 0; }
+        else if (120 <= h && h < 180) { r = 0; g = c; b = x; }
+        else if (180 <= h && h < 240) { r = 0; g = x; b = c; }
+        else if (240 <= h && h < 300) { r = x; g = 0; b = c; }
+        else { r = c; g = 0; b = x; }
+        return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
+      };
+
+      let r, g, b;
+      if (str.startsWith('hsl')) {
+        const parts = str.replace(/hsl\(|\)|%/g, '').split(',').map((v) => parseFloat(v.trim()));
+        if (parts.length >= 3 && parts.every((n) => Number.isFinite(n))) {
+          [r, g, b] = hslToRgb(parts[0], parts[1], parts[2]);
+        }
+      } else {
+        [r, g, b] = parseHex(str);
+      }
+
+      if (![r,g,b].every((n) => Number.isFinite(n))) return '#ffffff';
 
       const luma = 0.299 * r + 0.587 * g + 0.114 * b;
       return luma > 160 ? '#000000' : '#ffffff';
@@ -2265,56 +2246,6 @@ function drawEntities(c2){
   }
 
   window.createSpawnDebugPlaceholderEntity = window.createSpawnDebugPlaceholderEntity || createSpawnDebugPlaceholderEntity;
-
-  function __debugSpawnTestPlaceholder() {
-    try {
-      const T = window.TILE_SIZE || 32;
-      const worldX = T * 4.5;
-      const worldY = T * 4.5;
-
-      const e = {
-        id: 'debug-test-placeholder',
-        kind: 'DEBUG_PLACEHOLDER',
-        role: 'debug_placeholder',
-        populationType: 'none',
-
-        x: worldX,
-        y: worldY,
-        w: T,
-        h: T,
-
-        vx: 0,
-        vy: 0,
-        dir: 0,
-
-        solid: false,
-        collisionLayer: 'default',
-        collisionMask: 'default',
-
-        _debugSpawnPlaceholder: true,
-        _debugChar: 'X',
-        _debugColor: '#ff3366',
-        _debugTextColor: '#ffffff',
-
-        aiUpdate: function () {},
-        physicsUpdate: function () {},
-        onDamage: function () {},
-        onDeath: function () {},
-        onEnterTile: null,
-        onLeaveTile: null,
-        onInteract: null,
-
-        puppet: null,
-        rigOk: false,
-        removeMe: false,
-        _culled: false
-      };
-
-      if (window.G && Array.isArray(G.entities)) {
-        G.entities.push(e);
-      }
-    } catch (_) {}
-  }
 
   function safeLogSpawnFallbackError(stage, err, meta) {
     try {
@@ -2644,12 +2575,10 @@ function drawEntities(c2){
       for (const p of placements) {
         if (!p) continue;
 
-        const txRaw = Number.isFinite(p?.tx) ? p.tx : Math.floor((Number(p?.x) || 0) / T);
-        const tyRaw = Number.isFinite(p?.ty) ? p.ty : Math.floor((Number(p?.y) || 0) / T);
-        const tx = txRaw | 0;
-        const ty = tyRaw | 0;
-        const worldX = tx * T + T * 0.5;
-        const worldY = ty * T + T * 0.5;
+        const worldX = (p.x | 0);
+        const worldY = (p.y | 0);
+        const tx = (worldX / T) | 0;
+        const ty = (worldY / T) | 0;
 
         let ch = p.char || p.ch || p.ascii || p.symbol || null;
         if (!ch) {
@@ -2874,10 +2803,7 @@ function drawEntities(c2){
           floorPercent,
           walkableTiles,
           totalTiles,
-          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors ?? null,
-          components: generationMeta?.components,
-          disconnectedTiles: generationMeta?.disconnectedTiles,
-          disconnectedRooms: generationMeta?.disconnectedRooms
+          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors ?? null
         });
       } catch (_) {}
     }
@@ -2901,10 +2827,7 @@ function drawEntities(c2){
           floorPercent: generationMeta?.floorPercent,
           walkableTiles: generationMeta?.walkableTiles,
           totalTiles: generationMeta?.totalTiles,
-          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors,
-          components: generationMeta?.components,
-          disconnectedTiles: generationMeta?.disconnectedTiles,
-          disconnectedRooms: generationMeta?.disconnectedRooms
+          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors
         };
         const metaExtra = {
           levelId: levelRules?.id ?? levelRules?.level ?? levelId ?? 1,
@@ -2985,7 +2908,6 @@ function drawEntities(c2){
     finalizeLevelBuildOnce();
     if (mode === 'debug') {
       selfTestSpawnFallbackPlaceholder();
-      __debugSpawnTestPlaceholder();
     }
     window.__toggleMinimap?.(!!window.DEBUG_MINIMAP);
   }

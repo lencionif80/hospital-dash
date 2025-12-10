@@ -115,7 +115,6 @@
       case 'closed': {
         e.solid = true;
         e.isTileWalkable = false;
-        e.isOpen = false;
         if (near) {
           if (!urgentOk) {
             if (!e._warnedUrgent) {
@@ -135,7 +134,6 @@
         if (e.aiTimer >= OPEN_TIME) {
           e.solid = false;
           e.isTileWalkable = true;
-          e.isOpen = true;
           changeState(e, 'open');
         }
         break;
@@ -143,7 +141,6 @@
       case 'open': {
         e.solid = false;
         e.isTileWalkable = true;
-        e.isOpen = true;
         e.aiTimer += dt;
         if (near) {
           e.aiTimer = 0;
@@ -163,7 +160,6 @@
         if (e.aiTimer >= CLOSE_TIME) {
           e.solid = true;
           e.isTileWalkable = false;
-          e.isOpen = false;
           changeState(e, 'closed');
         }
         break;
@@ -171,7 +167,6 @@
       case 'burning': {
         e.solid = false;
         e.isTileWalkable = true;
-        e.isOpen = true;
         break;
       }
       default:
@@ -187,7 +182,6 @@
       role: 'door',
       populationType: 'doors',
       group: 'doors',
-      isDoor: true,
       x,
       y,
       w: 24,
@@ -237,10 +231,6 @@
     return createBaseDoor(ENT.DOOR_URGENT, x, y, true);
   }
 
-  function spawnDoorFromAscii(tx, ty, opts = {}, isUrgent = false) {
-    return isUrgent ? spawnUrgentDoor(undefined, undefined, { ...opts, tx, ty }) : spawnNormalDoor(undefined, undefined, { ...opts, tx, ty });
-  }
-
   function updateAllDoors(dt) {
     for (const d of doors) {
       if (!d) continue;
@@ -256,7 +246,4 @@
     doorAiUpdate,
     _all: doors
   };
-
-  root.Entities[ENT.DOOR_NORMAL] = { spawnFromAscii: (tx, ty, opts = {}) => spawnDoorFromAscii(tx, ty, opts, false) };
-  root.Entities[ENT.DOOR_URGENT] = { spawnFromAscii: (tx, ty, opts = {}) => spawnDoorFromAscii(tx, ty, opts, true) };
 })(typeof window !== 'undefined' ? window : globalThis);

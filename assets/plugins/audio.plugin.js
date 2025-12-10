@@ -69,11 +69,6 @@
     door_open:   SILENCE_URL,
     boss_door:   SILENCE_URL,
 
-    // --- Ascensores
-    elevator_open:   SILENCE_URL,
-    elevator_close:  SILENCE_URL,
-    elevator_travel: SILENCE_URL,
-
     // --- Enemigos
     mosquito_buzz: SILENCE_URL, // loop
     mosquito_die:  SILENCE_URL,
