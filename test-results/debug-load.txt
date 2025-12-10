@@ -5428,3 +5428,678 @@ source: level_rules.xml
 ############################################################
 ############################################################
 ############################################################
+================================
+timestamp: 2025-12-10 23:15:34
+levelId: 1
+mode: normal
+seed: 1765404934080
+source: level_rules.xml
+
+[globals]
+{
+    "tileSize": 32,
+    "defaultLightAlpha": 0.6,
+    "maxHeroes": 2,
+    "defaultHero": "enrique",
+    "mapOccupancyRatio": 0.9,
+    "culling": 18,
+    "massHero": 1,
+    "massCart": 3.5,
+    "massRat": 0.5,
+    "massMosquito": 0.2,
+    "massNPC": 1.1,
+    "massPill": 0.1,
+    "restitution": 0.12,
+    "friction": 0.045,
+    "slideFriction": 0.02,
+    "npcLightMedico": "#6bd3ff",
+    "npcLightJefe": "#ffd46b",
+    "npcLightGuardia": "#b9ff6b",
+    "npcLightFamiliar": "#ff6b9a",
+    "firstBellDelayMinutes": 5
+}
+[level]
+{
+    "id": 1,
+    "width": 60,
+    "height": 40,
+    "rooms": 6,
+    "culling": 14,
+    "heroes": 1,
+    "difficulty": 1,
+    "boss": "hematologico",
+    "cooling": null,
+    "seed": 1765404934080,
+    "spawn": {
+        "hero": true,
+        "x": "auto",
+        "y": "auto",
+        "_tagName": "spawn"
+    },
+    "minimap": {
+        "startVisible": true,
+        "startSmall": true,
+        "_tagName": "minimap"
+    },
+    "lighting": {
+        "heroAlpha": 0.6,
+        "npcAlpha": 0.6,
+        "npcColors": "medico:#6bd3ff,jefe:#ffd46b,guardia:#b9ff6b,familiar:#ff6b9a",
+        "brokenLights": 0.1,
+        "_tagName": "lighting"
+    },
+    "legend": {
+        "enable": true,
+        "include": "all",
+        "_tagName": "legend"
+    },
+    "rules": [
+        {
+            "type": "patient",
+            "count": 3,
+            "perRoom": 1,
+            "names": "Dolores de Barriga,Angustias P\u00e9rez,Lola Mento",
+            "pillNameMode": "autoAnagramOrFunny",
+            "pillPickup": "touchOrE",
+            "bell": true,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "medico",
+            "perRoom": "0-1",
+            "count": 2,
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "guardia",
+            "perRoom": "0-1",
+            "count": 2,
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "familiar",
+            "perRoom": "0-1",
+            "count": 2,
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "jefe",
+            "unique": true,
+            "at": "room:near_boss",
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "supervisora",
+            "unique": true,
+            "at": "room:control",
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "enemy",
+            "kind": "rat",
+            "difficulty": 1,
+            "perRoom": "0-2",
+            "count": 2,
+            "_tagName": "rule"
+        },
+        {
+            "type": "enemy",
+            "kind": "mosquito",
+            "difficulty": 1,
+            "perRoom": "0-1",
+            "count": 1,
+            "speedScale": 0.7,
+            "chaseRadius": 160,
+            "_tagName": "rule"
+        },
+        {
+            "type": "cart",
+            "kind": "comida",
+            "perRoom": "0-1",
+            "count": 2,
+            "_tagName": "rule"
+        },
+        {
+            "type": "cart",
+            "kind": "medicina",
+            "perRoom": "0-1",
+            "count": 2,
+            "_tagName": "rule"
+        },
+        {
+            "type": "cart",
+            "kind": "urgencias",
+            "perRoom": "0-1",
+            "count": 1,
+            "_tagName": "rule"
+        },
+        {
+            "type": "door",
+            "kind": "urgencias",
+            "at": "bossRoomEntrance",
+            "_tagName": "rule"
+        },
+        {
+            "type": "elevator",
+            "count": 1,
+            "connect": "room:entrance->room:control",
+            "forbidIn": "bossRoom",
+            "forbidTo": "bossRoom",
+            "_tagName": "rule"
+        },
+        {
+            "type": "phone",
+            "count": 1,
+            "at": "room:control",
+            "_tagName": "rule"
+        },
+        {
+            "type": "light",
+            "kind": "normal",
+            "perRoom": "1-3",
+            "alpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "light",
+            "kind": "torre",
+            "perRoom": "0-1",
+            "alpha": 0.6,
+            "_tagName": "rule"
+        }
+    ],
+    "rulesByType": {
+        "patient": [
+            {
+                "type": "patient",
+                "count": 3,
+                "perRoom": 1,
+                "names": "Dolores de Barriga,Angustias P\u00e9rez,Lola Mento",
+                "pillNameMode": "autoAnagramOrFunny",
+                "pillPickup": "touchOrE",
+                "bell": true,
+                "_tagName": "rule"
+            }
+        ],
+        "npc": [
+            {
+                "type": "npc",
+                "kind": "medico",
+                "perRoom": "0-1",
+                "count": 2,
+                "lightAlpha": 0.6,
+                "_tagName": "rule"
+            },
+            {
+                "type": "npc",
+                "kind": "guardia",
+                "perRoom": "0-1",
+                "count": 2,
+                "lightAlpha": 0.6,
+                "_tagName": "rule"
+            },
+            {
+                "type": "npc",
+                "kind": "familiar",
+                "perRoom": "0-1",
+                "count": 2,
+                "lightAlpha": 0.6,
+                "_tagName": "rule"
+            },
+            {
+                "type": "npc",
+                "kind": "jefe",
+                "unique": true,
+                "at": "room:near_boss",
+                "lightAlpha": 0.6,
+                "_tagName": "rule"
+            },
+            {
+                "type": "npc",
+                "kind": "supervisora",
+                "unique": true,
+                "at": "room:control",
+                "lightAlpha": 0.6,
+                "_tagName": "rule"
+            }
+        ],
+        "enemy": [
+            {
+                "type": "enemy",
+                "kind": "rat",
+                "difficulty": 1,
+                "perRoom": "0-2",
+                "count": 2,
+                "_tagName": "rule"
+            },
+            {
+                "type": "enemy",
+                "kind": "mosquito",
+                "difficulty": 1,
+                "perRoom": "0-1",
+                "count": 1,
+                "speedScale": 0.7,
+                "chaseRadius": 160,
+                "_tagName": "rule"
+            }
+        ],
+        "cart": [
+            {
+                "type": "cart",
+                "kind": "comida",
+                "perRoom": "0-1",
+                "count": 2,
+                "_tagName": "rule"
+            },
+            {
+                "type": "cart",
+                "kind": "medicina",
+                "perRoom": "0-1",
+                "count": 2,
+                "_tagName": "rule"
+            },
+            {
+                "type": "cart",
+                "kind": "urgencias",
+                "perRoom": "0-1",
+                "count": 1,
+                "_tagName": "rule"
+            }
+        ],
+        "door": [
+            {
+                "type": "door",
+                "kind": "urgencias",
+                "at": "bossRoomEntrance",
+                "_tagName": "rule"
+            }
+        ],
+        "elevator": [
+            {
+                "type": "elevator",
+                "count": 1,
+                "connect": "room:entrance->room:control",
+                "forbidIn": "bossRoom",
+                "forbidTo": "bossRoom",
+                "_tagName": "rule"
+            }
+        ],
+        "light": [
+            {
+                "type": "light",
+                "kind": "normal",
+                "perRoom": "1-3",
+                "alpha": 0.6,
+                "_tagName": "rule"
+            },
+            {
+                "type": "light",
+                "kind": "torre",
+                "perRoom": "0-1",
+                "alpha": 0.6,
+                "_tagName": "rule"
+            }
+        ],
+        "phone": [
+            {
+                "type": "phone",
+                "count": 1,
+                "at": "room:control",
+                "_tagName": "rule"
+            }
+        ],
+        "other": []
+    },
+    "patientRules": [
+        {
+            "type": "patient",
+            "count": 3,
+            "perRoom": 1,
+            "names": "Dolores de Barriga,Angustias P\u00e9rez,Lola Mento",
+            "pillNameMode": "autoAnagramOrFunny",
+            "pillPickup": "touchOrE",
+            "bell": true,
+            "_tagName": "rule"
+        }
+    ],
+    "npcRules": [
+        {
+            "type": "npc",
+            "kind": "medico",
+            "perRoom": "0-1",
+            "count": 2,
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "guardia",
+            "perRoom": "0-1",
+            "count": 2,
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "familiar",
+            "perRoom": "0-1",
+            "count": 2,
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "jefe",
+            "unique": true,
+            "at": "room:near_boss",
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "npc",
+            "kind": "supervisora",
+            "unique": true,
+            "at": "room:control",
+            "lightAlpha": 0.6,
+            "_tagName": "rule"
+        }
+    ],
+    "enemyRules": [
+        {
+            "type": "enemy",
+            "kind": "rat",
+            "difficulty": 1,
+            "perRoom": "0-2",
+            "count": 2,
+            "_tagName": "rule"
+        },
+        {
+            "type": "enemy",
+            "kind": "mosquito",
+            "difficulty": 1,
+            "perRoom": "0-1",
+            "count": 1,
+            "speedScale": 0.7,
+            "chaseRadius": 160,
+            "_tagName": "rule"
+        }
+    ],
+    "cartRules": [
+        {
+            "type": "cart",
+            "kind": "comida",
+            "perRoom": "0-1",
+            "count": 2,
+            "_tagName": "rule"
+        },
+        {
+            "type": "cart",
+            "kind": "medicina",
+            "perRoom": "0-1",
+            "count": 2,
+            "_tagName": "rule"
+        },
+        {
+            "type": "cart",
+            "kind": "urgencias",
+            "perRoom": "0-1",
+            "count": 1,
+            "_tagName": "rule"
+        }
+    ],
+    "doorRules": [
+        {
+            "type": "door",
+            "kind": "urgencias",
+            "at": "bossRoomEntrance",
+            "_tagName": "rule"
+        }
+    ],
+    "elevatorRules": [
+        {
+            "type": "elevator",
+            "count": 1,
+            "connect": "room:entrance->room:control",
+            "forbidIn": "bossRoom",
+            "forbidTo": "bossRoom",
+            "_tagName": "rule"
+        }
+    ],
+    "lightRules": [
+        {
+            "type": "light",
+            "kind": "normal",
+            "perRoom": "1-3",
+            "alpha": 0.6,
+            "_tagName": "rule"
+        },
+        {
+            "type": "light",
+            "kind": "torre",
+            "perRoom": "0-1",
+            "alpha": 0.6,
+            "_tagName": "rule"
+        }
+    ],
+    "phoneRules": [
+        {
+            "type": "phone",
+            "count": 1,
+            "at": "room:control",
+            "_tagName": "rule"
+        }
+    ],
+    "otherRules": [],
+    "deprecated": {
+        "bossRoomFlag": false
+    },
+    "mode": "normal"
+}
+[rules]
+[
+    {
+        "type": "patient",
+        "count": 3,
+        "perRoom": 1,
+        "names": "Dolores de Barriga,Angustias P\u00e9rez,Lola Mento",
+        "pillNameMode": "autoAnagramOrFunny",
+        "pillPickup": "touchOrE",
+        "bell": true,
+        "_tagName": "rule"
+    },
+    {
+        "type": "npc",
+        "kind": "medico",
+        "perRoom": "0-1",
+        "count": 2,
+        "lightAlpha": 0.6,
+        "_tagName": "rule"
+    },
+    {
+        "type": "npc",
+        "kind": "guardia",
+        "perRoom": "0-1",
+        "count": 2,
+        "lightAlpha": 0.6,
+        "_tagName": "rule"
+    },
+    {
+        "type": "npc",
+        "kind": "familiar",
+        "perRoom": "0-1",
+        "count": 2,
+        "lightAlpha": 0.6,
+        "_tagName": "rule"
+    },
+    {
+        "type": "npc",
+        "kind": "jefe",
+        "unique": true,
+        "at": "room:near_boss",
+        "lightAlpha": 0.6,
+        "_tagName": "rule"
+    },
+    {
+        "type": "npc",
+        "kind": "supervisora",
+        "unique": true,
+        "at": "room:control",
+        "lightAlpha": 0.6,
+        "_tagName": "rule"
+    },
+    {
+        "type": "enemy",
+        "kind": "rat",
+        "difficulty": 1,
+        "perRoom": "0-2",
+        "count": 2,
+        "_tagName": "rule"
+    },
+    {
+        "type": "enemy",
+        "kind": "mosquito",
+        "difficulty": 1,
+        "perRoom": "0-1",
+        "count": 1,
+        "speedScale": 0.7,
+        "chaseRadius": 160,
+        "_tagName": "rule"
+    },
+    {
+        "type": "cart",
+        "kind": "comida",
+        "perRoom": "0-1",
+        "count": 2,
+        "_tagName": "rule"
+    },
+    {
+        "type": "cart",
+        "kind": "medicina",
+        "perRoom": "0-1",
+        "count": 2,
+        "_tagName": "rule"
+    },
+    {
+        "type": "cart",
+        "kind": "urgencias",
+        "perRoom": "0-1",
+        "count": 1,
+        "_tagName": "rule"
+    },
+    {
+        "type": "door",
+        "kind": "urgencias",
+        "at": "bossRoomEntrance",
+        "_tagName": "rule"
+    },
+    {
+        "type": "elevator",
+        "count": 1,
+        "connect": "room:entrance->room:control",
+        "forbidIn": "bossRoom",
+        "forbidTo": "bossRoom",
+        "_tagName": "rule"
+    },
+    {
+        "type": "phone",
+        "count": 1,
+        "at": "room:control",
+        "_tagName": "rule"
+    },
+    {
+        "type": "light",
+        "kind": "normal",
+        "perRoom": "1-3",
+        "alpha": 0.6,
+        "_tagName": "rule"
+    },
+    {
+        "type": "light",
+        "kind": "torre",
+        "perRoom": "0-1",
+        "alpha": 0.6,
+        "_tagName": "rule"
+    }
+]
+[generation]
+{
+    "roomsRequested": 6,
+    "roomsGenerated": 5,
+    "corridorWidthUsed": 2,
+    "culling": 14,
+    "cooling": 20,
+    "bossReachable": true,
+    "allRoomsReachable": true,
+    "floorPercent": 42.333333333333336,
+    "walkableTiles": 1016,
+    "totalTiles": 2400,
+    "numCorridors": 4,
+    "boss": "hematologico",
+    "difficulty": 1
+}
+[meta_extra]
+{
+    "levelId": 1,
+    "mode": "normal",
+    "width": 60,
+    "height": 40,
+    "seed": 1765404934080,
+    "floorPercent": null,
+    "corridorWidthUsed": 2,
+    "culling": 14,
+    "rooms": 6,
+    "boss": "hematologico",
+    "difficulty": 1,
+    "roomsRequested": 6
+}
+[map]
+############################################################
+############################################################
+############################################################
+############################################################
+#######################################............#########
+#######################################............#########
+#######################################............#########
+####...........k...####################............#########
+####..F............####################.......r....#########
+####...............####################g...........#########
+####...............##################.d........J...#########
+####...........o...###--------------#.#..pb....l...#########
+####...............###---------H----#.#.vi.........#########
+####.......pb......d.#-t------------#.#............#########
+####.......i.......#.#---U-----l----#.#............#########
+####g....v.........#.#--------------#.#.........k..#########
+####...............#.#--------------#.#............#########
+####.............pb#.d-F------------d.######################
+####.............i.###--------------########################
+####..............L###------E-------########################
+###########d##########--------------#########;;;;;;;;;;;;###
+#########...##########--------------#########;;;;;;;;;;;;###
+#########...##########-----------S--#########;;;;;;;;;;;;###
+#########d###################################;;;;;;;;;;;;###
+###,,,,,,,,,,,,,#############################;;;;;;;;;;;;###
+###,,,,,,,,,,,,L#############################;;;;;;;;;;;;###
+###,,,,,,,,,E,,,#############################;;;;;;;;;;;;###
+###,,,,,,,,,,,,,#########......##############;;;;;;;;;;;;###
+###,,,,,,,,,,,,,#...........................u;;;l;;;;;;;;###
+###,,,,,,,,,,,,,d...........................#;;;;;;;;;X;;###
+###,,,,,,,,,,,,,#########..............######;;;;;;;;;;;;###
+###,,,,,,,,,,,,,#########..............######;;;;;;;;;;;;###
+###,,,,,,,,,,,,,#########..............######;;;;;;;;;;;;###
+###,,,,,,,,,,,,,#########..............######;;;;;;;;;;;;###
+#########################..............######;;;;;;;;;;;;###
+#########################......##############;;;;;;;;;;;;###
+#############################################;;;;;;;;;;;;###
+############################################################
+############################################################
+############################################################
