@@ -2829,7 +2829,10 @@ function drawEntities(c2){
           floorPercent,
           walkableTiles,
           totalTiles,
-          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors ?? null
+          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors ?? null,
+          components: generationMeta?.components,
+          disconnectedTiles: generationMeta?.disconnectedTiles,
+          disconnectedRooms: generationMeta?.disconnectedRooms
         });
       } catch (_) {}
     }
@@ -2853,7 +2856,10 @@ function drawEntities(c2){
           floorPercent: generationMeta?.floorPercent,
           walkableTiles: generationMeta?.walkableTiles,
           totalTiles: generationMeta?.totalTiles,
-          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors
+          numCorridors: generationMeta?.corridorsBuilt ?? generationMeta?.numCorridors,
+          components: generationMeta?.components,
+          disconnectedTiles: generationMeta?.disconnectedTiles,
+          disconnectedRooms: generationMeta?.disconnectedRooms
         };
         const metaExtra = {
           levelId: levelRules?.id ?? levelRules?.level ?? levelId ?? 1,
