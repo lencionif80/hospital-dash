@@ -19,7 +19,9 @@
       overlay = D.createElement('div');
       overlay.id = 'introOverlay';
       overlay.innerHTML = `<img id="introFrame" alt="intro frame" />
-        <div class="ui"><span class="hint">Pulsa una tecla o haz clic para comenzar.</span></div>`;
+        <div id="intro-ui-layer" class="ui intro-ui-layer" aria-live="polite" aria-atomic="true">
+          <span class="hint intro-message intro-skip-hint">Pulsa una tecla o haz clic para comenzar.</span>
+        </div>`;
       D.body.appendChild(overlay);
     }
     img = overlay.querySelector('#introFrame');
