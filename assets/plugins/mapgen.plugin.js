@@ -1718,7 +1718,7 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
           connectRoomPair(ascii, baseRoom, target, corridorWidth, rng, cs, rooms, graph);
         } else {
           const rep = summary.representatives[compId] || { x: target.centerX|0, y: target.centerY|0 };
-          carveCorridor(ascii, rep, anchorPoint, corridorWidth, rng, cs);
+          carveCorridor(ascii, rep, anchorPoint, corridorWidth, rng, cs, rooms);
         }
         handled.add(compId);
       }
@@ -1727,7 +1727,7 @@ const CHARSET = Object.assign({}, (window.CHARSET_DEFAULT || {}), CHARSET_DEFAUL
       for (let comp=0; comp<summary.components; comp++){
         if (comp === summary.mainIndex || handled.has(comp)) continue;
         const rep = summary.representatives[comp] || anchorPoint;
-        carveCorridor(ascii, rep, anchorPoint, corridorWidth, rng, cs);
+        carveCorridor(ascii, rep, anchorPoint, corridorWidth, rng, cs, rooms);
       }
 
       summary = analyzeConnectivity(ascii, anchorPoint, cs);
