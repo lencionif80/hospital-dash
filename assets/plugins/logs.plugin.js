@@ -431,34 +431,51 @@
   }
 
   function record(level, args, meta = {}) {
-    const entry = {
-      id: ++state.seq,
-      level,
-      args: normaliseArgs(args),
-      data: meta.data || null,
-      tag: meta.tag || null,
-      source: meta.source || null,
-      stack: meta.stack || null,
-      time: new Date(),
-    };
-    entry.text = entry.args.map(toText).join(' ');
-    if (meta.append) entry.text += ` ${meta.append}`;
-    if (shouldIgnore(entry)) return entry;
+    try {
+      const entry = {
+        id: ++state.seq,
+        level,
+        args: normaliseArgs(args),
+        data: meta.data || null,
+        tag: meta.tag || null,
+        source: meta.source || null,
+        stack: meta.stack || null,
+        time: new Date(),
+      };
+      entry.text = entry.args.map(toText).join(' ');
+      if (meta.append) entry.text += ` ${meta.append}`;
+      if (shouldIgnore(entry)) return entry;
 
-    state.entries.push(entry);
-    if (state.entries.length > state.bufferSize) {
-      state.entries.splice(0, state.entries.length - state.bufferSize);
+      state.entries.push(entry);
+      if (state.entries.length > state.bufferSize) {
+        state.entries.splice(0, state.entries.length - state.bufferSize);
+      }
+      if (entry.tag) {
+        state.availableTags.add(entry.tag);
+        state.tagOptionsDirty = true;
+        ensureTagOptions();
+      }
+      if (passesFilters(entry)) {
+        appendEntry(entry);
+      }
+      schedulePersist();
+      return entry;
+    } catch (err) {
+      try {
+        originalConsole?.error?.('[LOGS_PLUGIN_ERROR] record', String((err && err.message) || err));
+      } catch (_) {}
+      return {
+        id: ++state.seq,
+        level: level || 'error',
+        args: [],
+        data: null,
+        tag: meta.tag || null,
+        source: meta.source || 'logs.plugin',
+        stack: meta.stack || null,
+        time: new Date(),
+        text: String((err && err.message) || err || 'log_error'),
+      };
     }
-    if (entry.tag) {
-      state.availableTags.add(entry.tag);
-      state.tagOptionsDirty = true;
-      ensureTagOptions();
-    }
-    if (passesFilters(entry)) {
-      appendEntry(entry);
-    }
-    schedulePersist();
-    return entry;
   }
 
   function appendEntry(entry) {
@@ -615,24 +632,24 @@
     if (console.__hdLogPatched) return;
     console.__hdLogPatched = true;
     console.log = function (...args) {
-      originalConsole.log(...args);
-      record('info', args, { source: 'console.log' });
-      sendConsoleExport('log', args, { source: 'console.log' });
+      try { originalConsole.log(...args); } catch (_) {}
+      try { record('info', args, { source: 'console.log' }); } catch (err) { try { originalConsole?.error?.('[LOGS_PLUGIN_ERROR] console.log', err); } catch (_) {} }
+      try { sendConsoleExport('log', args, { source: 'console.log' }); } catch (_) {}
     };
     console.info = function (...args) {
-      originalConsole.info(...args);
-      record('info', args, { source: 'console.info' });
-      sendConsoleExport('log', args, { source: 'console.info' });
+      try { originalConsole.info(...args); } catch (_) {}
+      try { record('info', args, { source: 'console.info' }); } catch (err) { try { originalConsole?.error?.('[LOGS_PLUGIN_ERROR] console.info', err); } catch (_) {} }
+      try { sendConsoleExport('log', args, { source: 'console.info' }); } catch (_) {}
     };
     console.warn = function (...args) {
-      originalConsole.warn(...args);
-      record('warn', args, { source: 'console.warn' });
-      sendConsoleExport('warn', args, { source: 'console.warn' });
+      try { originalConsole.warn(...args); } catch (_) {}
+      try { record('warn', args, { source: 'console.warn' }); } catch (err) { try { originalConsole?.error?.('[LOGS_PLUGIN_ERROR] console.warn', err); } catch (_) {} }
+      try { sendConsoleExport('warn', args, { source: 'console.warn' }); } catch (_) {}
     };
     console.error = function (...args) {
-      originalConsole.error(...args);
-      record('error', args, { source: 'console.error' });
-      sendConsoleExport('error', args, { source: 'console.error' });
+      try { originalConsole.error(...args); } catch (_) {}
+      try { record('error', args, { source: 'console.error' }); } catch (err) { try { originalConsole?.error?.('[LOGS_PLUGIN_ERROR] console.error', err); } catch (_) {} }
+      try { sendConsoleExport('error', args, { source: 'console.error' }); } catch (_) {}
     };
   }
 
