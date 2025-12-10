@@ -276,7 +276,7 @@
 
     try {
       const puppet = window.Puppet?.bind?.(patient, 'patient_bed', { z: HERO_Z, scale: 1, data: { skin: patient.skin } })
-        || W.PuppetAPI?.attach?.(patient, { rig: 'patient_bed', z: HERO_Z, scale: 1, data: { skin: patient.skin } });
+        || (W.safeAttachRig ? W.safeAttachRig(patient, { rig: 'patient_bed', z: HERO_Z, scale: 1, data: { skin: patient.skin } }, 'patients.bed') : W.PuppetAPI?.attach?.(patient, { rig: 'patient_bed', z: HERO_Z, scale: 1, data: { skin: patient.skin } }));
       patient.rigOk = patient.rigOk === true || !!puppet;
     } catch (_) {
       patient.rigOk = patient.rigOk === true;
@@ -381,8 +381,8 @@
       skin: pillSkin
     };
     try {
-      const puppet = window.Puppet?.bind?.(pill, 'pill', { z: 0, scale: 1, data: { skin: pill.skin } })
-        || W.PuppetAPI?.attach?.(pill, { rig: 'pill', z: 0, scale: 1, data: { skin: pill.skin } });
+    const puppet = window.Puppet?.bind?.(pill, 'pill', { z: 0, scale: 1, data: { skin: pill.skin } })
+      || (W.safeAttachRig ? W.safeAttachRig(pill, { rig: 'pill', z: 0, scale: 1, data: { skin: pill.skin } }, 'patients.pill') : W.PuppetAPI?.attach?.(pill, { rig: 'pill', z: 0, scale: 1, data: { skin: pill.skin } }));
       pill.rigOk = pill.rigOk === true || !!puppet;
     } catch (_) {
       pill.rigOk = pill.rigOk === true;
@@ -564,8 +564,8 @@
       addEntity(furiosa);
     }
     try {
-      const puppet = window.Puppet?.bind?.(furiosa, 'patient_furiosa', { z: 0, scale: 1, data: { skin: furiosa.skin } })
-        || W.PuppetAPI?.attach?.(furiosa, { rig: 'patient_furiosa', z: 0, scale: 1, data: { skin: furiosa.skin } });
+    const puppet = window.Puppet?.bind?.(furiosa, 'patient_furiosa', { z: 0, scale: 1, data: { skin: furiosa.skin } })
+      || (W.safeAttachRig ? W.safeAttachRig(furiosa, { rig: 'patient_furiosa', z: 0, scale: 1, data: { skin: furiosa.skin } }, 'patients.furious') : W.PuppetAPI?.attach?.(furiosa, { rig: 'patient_furiosa', z: 0, scale: 1, data: { skin: furiosa.skin } }));
       furiosa.rigOk = furiosa.rigOk === true || !!puppet;
     } catch (_) {
       furiosa.rigOk = furiosa.rigOk === true;
@@ -682,7 +682,8 @@
       state: 'idle',
     };
 
-    try { W.PuppetAPI?.attach?.(e, e.puppet); } catch (_) {}
+    if (W.safeAttachRig) W.safeAttachRig(e, e.puppet, 'patients.generic');
+    else try { W.PuppetAPI?.attach?.(e, e.puppet); } catch (_) {}
     addEntity(e);
 
     const stats = ensureStats();

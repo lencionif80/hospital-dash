@@ -231,15 +231,10 @@ function createGameEntity(cfg) {
   };
 
   // Adjuntar Puppet
-  if (window.PuppetAPI && e.puppet && e.puppet.rig) {
-    try {
-      PuppetAPI.attach(e, e.puppet);
-    } catch (err) {
-      e.rigOk = false;
-      if (window.DEBUG_RIGS) {
-        console.error('[RigError] Fallo al adjuntar rig a entidad', e.kind, err);
-      }
-    }
+  if (window.safeAttachRig && e.puppet && e.puppet.rig) {
+    safeAttachRig(e, e.puppet, 'entities.base');
+  } else if (window.PuppetAPI && e.puppet && e.puppet.rig) {
+    try { PuppetAPI.attach(e, e.puppet); } catch (err) { e.rigOk = false; }
   } else {
     e.rigOk = false;
     if (window.DEBUG_RIGS) {

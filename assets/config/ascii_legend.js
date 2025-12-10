@@ -172,24 +172,49 @@
     map[ty][tx] = 0;
   }
 
-  function resolvePlaceholderColor(def){
-    const kind = String(def?.kind || def?.factoryKey || '').toLowerCase();
-    const tag = (def?.type || '').toLowerCase();
-    const has = (needle) => kind.includes(needle) || tag.includes(needle);
-    if (has('hero')) return '#6bd3ff';
-    if (has('npc') || has('staff')) return '#ff9800';
-    if (has('enemy') || has('hostile')) return '#f44336';
-    if (has('cart')) return '#9e9e9e';
-    if (has('light')) return '#ffffff';
-    if (has('elevator')) return '#9c27b0';
-    if (has('door')) return '#795548';
-    if (has('patient') || has('bed') || has('bell')) return '#e91e63';
-    if (has('boss')) return '#111111';
-    if (has('fire')) return '#ffeb3b';
-    if (has('water') || has('wet')) return '#2196f3';
-    if (has('loot') || has('pill') || has('syringe') || has('drip') || has('food') || has('object')) return '#4caf50';
-    if (has('phone')) return '#90a4ae';
-    return '#607d8b';
+  const PLACEHOLDER_DEBUG_COLORS = {
+    'S': '#4da6ff',
+    'P': '#ffd166',
+    'I': '#a0ffcf',
+    'D': '#7f8c8d',
+    'C': '#b0956c',
+    'M': '#ff77aa',
+    'R': '#c7c7c7',
+    'E': '#9b59b6',
+    'L': '#f1c40f',
+    '#': '#444444',
+    '.': '#666666',
+    '?': '#ff3366'
+  };
+
+  function resolvePlaceholderColor(ch, def, reason){
+    if (def?.placeholderColor) return def.placeholderColor;
+    if (def?.debugColor) return def.debugColor;
+
+    const meta = def || {};
+    const kind = String(meta.kind || meta.factoryKey || '').toLowerCase();
+    const role = String(meta.role || '').toLowerCase();
+    const special = String(meta.specialRoom || '').toLowerCase();
+    const has = (needle) => kind.includes(needle) || role.includes(needle);
+
+    if (has('hero') || meta.isHero) return '#6bd3ff';
+    if (meta.isSpawn) return '#4da6ff';
+    if (meta.isPatient || has('patient') || has('bed') || has('bell')) return '#ffd166';
+    if (meta.isDoor || has('door')) return '#7f8c8d';
+    if (meta.isCart || has('cart')) return '#b0956c';
+    if (meta.isEnemy || has('enemy') || has('hostile')) return '#ff77aa';
+    if (has('rat')) return '#c7c7c7';
+    if (meta.isNPC || has('npc') || has('staff')) return '#ff9800';
+    if (meta.isHazard || has('fire')) return '#ffeb3b';
+    if (meta.isWater || has('water') || has('wet')) return '#2196f3';
+    if (meta.isDoor || meta.bossDoor || has('boss')) return '#111111';
+    if (has('light')) return '#f1c40f';
+    if (has('elevator')) return '#9b59b6';
+    if (has('pill') || has('syringe') || has('drip') || has('food') || has('loot')) return '#a0ffcf';
+    if (special) return '#90a4ae';
+    const colorByChar = PLACEHOLDER_DEBUG_COLORS[ch] || null;
+    if (colorByChar) return colorByChar;
+    return PLACEHOLDER_DEBUG_COLORS['?'];
   }
 
   function ensurePlaceholderSprite(key, char, color){
@@ -227,12 +252,12 @@
     return { x: tx * tile, y: ty * tile, tile };
   }
 
-  PlacementAPI.spawnFallbackPlaceholder = function spawnFallbackPlaceholder(char, def, tx, ty, reason, context = {}) {
+  PlacementAPI.spawnFallbackPlaceholder = function spawnFallbackPlaceholder(charLabel, def, tx, ty, source, ctx = {}) {
     const world = gridToWorld(tx, ty);
     const tile = world.tile;
-    const asciiChar = char || def?.char || def?.key || '?';
-    ensureFloorAt(context.map || context.G, tx, ty);
-    const color = resolvePlaceholderColor(def);
+    const asciiChar = charLabel || def?.char || def?.key || ctx?.char || '?';
+    ensureFloorAt(ctx.map || ctx.G, tx, ty);
+    const color = resolvePlaceholderColor(asciiChar, def, ctx?.reason || source);
     const spriteKey = ensurePlaceholderSprite('spawn_placeholder', asciiChar, color);
     const placeholder = {
       kind: def?.kind || def?.key || 'PLACEHOLDER',
@@ -240,6 +265,7 @@
       factoryKey: def?.factoryKey,
       x: world.x,
       y: world.y,
+      grid: { x: tx, y: ty },
       w: tile,
       h: tile,
       blocking: false,
@@ -249,8 +275,17 @@
       color,
       spriteKey,
       placeholder: true,
-      rigOk: false
+      rigOk: false,
+      _debugSpawnPlaceholder: true,
+      _debugChar: asciiChar,
+      _debugColor: color,
+      _debugReason: ctx?.reason || source,
+      _debugStage: ctx?.stage || source
     };
+
+    const reason = ctx?.reason || source || 'spawnFallback';
+    const stage = ctx?.stage || source || 'ascii_legend.spawnFallbackPlaceholder';
+    const error = ctx?.error || null;
 
     if (typeof console !== 'undefined' && console.error) {
       try {
@@ -260,13 +295,30 @@
           factoryKey: def?.factoryKey,
           x: tx,
           y: ty,
-          reason
+          reason,
+          stage,
+          error: error ? String(error) : null
         });
       } catch (_) {}
     }
 
-    const shouldRegister = context.autoRegister !== false;
-    const game = context.G || root.G;
+    try {
+      if (typeof registerSpawnFallback === 'function') {
+        registerSpawnFallback({
+          char: asciiChar,
+          kind: def?.kind || def?.key || null,
+          factoryKey: def?.factoryKey || null,
+          grid: { x: tx, y: ty },
+          world: { x: world.x, y: world.y },
+          stage,
+          reason,
+          error: error ? String(error?.message || error) : null
+        });
+      }
+    } catch (_) {}
+
+    const shouldRegister = ctx.autoRegister !== false;
+    const game = ctx.G || root.G;
     if (shouldRegister && game && Array.isArray(game.entities) && !game.entities.includes(placeholder)) {
       game.entities.push(placeholder);
     }
@@ -274,15 +326,35 @@
     return placeholder;
   };
 
-  PlacementAPI.spawnFromAscii = function spawnFromAscii(defOrChar, tx, ty, context, char) {
+  root.AsciiLegend.spawnFallbackPlaceholder = PlacementAPI.spawnFallbackPlaceholder;
+
+  PlacementAPI.spawnFromAscii = function spawnFromAscii(defOrChar, tx, ty, extraCtx, char) {
     const def = (typeof defOrChar === 'string' || typeof defOrChar === 'number')
       ? PlacementAPI.getDefFromChar(defOrChar, { context: 'PlacementAPI.spawnFromAscii' })
       : defOrChar;
-    const asciiChar = char || context?.char || (typeof defOrChar === 'string' ? defOrChar : def?.char);
-    if (!def || typeof tx !== 'number' || typeof ty !== 'number') {
-      return PlacementAPI.spawnFallbackPlaceholder(asciiChar, null, tx, ty, 'AsciiLegend entry missing', context);
-    }
+    const asciiChar = def?.char || char || extraCtx?.char || (typeof defOrChar === 'string' ? defOrChar : null) || '?';
     const world = gridToWorld(tx, ty);
+    const ctx = extraCtx || {};
+    const fallback = (reason, stage, err) => PlacementAPI.spawnFallbackPlaceholder(
+      asciiChar,
+      def || null,
+      tx,
+      ty,
+      'ascii_legend.spawnFromAscii',
+      {
+        ...ctx,
+        x: world.x,
+        y: world.y,
+        reason,
+        error: err ? (err?.message || err) : null,
+        stage: stage || 'ascii_legend.spawnFromAscii'
+      }
+    );
+
+    if (!def || typeof tx !== 'number' || typeof ty !== 'number') {
+      return fallback('no def found for char', 'ascii_legend.spawnFromAscii');
+    }
+
     try {
       console.log('[SPAWN_ASCII]', {
         char: asciiChar,
@@ -291,9 +363,10 @@
         world: { x: world.x, y: world.y }
       });
     } catch (_) {}
+
     const kind = def.kind || def.key;
     const factoryKey = def.factoryKey || kind;
-    const opts = { _ascii: def, tx, ty, context };
+    const opts = { _ascii: def, tx, ty, context: ctx, char: asciiChar };
     const applyLegendTint = (entity) => {
       const tintKey = typeof def.tint === 'string' ? def.tint.toLowerCase() : null;
       const tint = tintKey ? TINT_COLORS[tintKey] : null;
@@ -306,27 +379,51 @@
       } catch (_) {}
       return entity;
     };
+
+    if (!factoryKey) {
+      return fallback('no factoryKey defined', 'ascii_legend.spawnFromAscii');
+    }
+
     if (def.isSpawn) {
       try {
         const entity = root.SpawnerManager?.spawnFromDef?.(def, tx, ty, opts);
-        return entity ? applyLegendTint(entity) : PlacementAPI.spawnFallbackPlaceholder(asciiChar, def, tx, ty, 'Spawner returned null', context);
+        return entity ? applyLegendTint(entity) : fallback('Spawner returned null', 'SpawnerManager.spawnFromDef');
       } catch (err) {
-        return PlacementAPI.spawnFallbackPlaceholder(asciiChar, def, tx, ty, `Spawner error: ${err?.message || err}`, context);
+        return fallback(`spawnFromAscii error: ${err?.message || err}`, 'SpawnerManager.spawnFromDef', err);
       }
     }
     if (kind === 'wall' || kind === 'void') return null;
+
+    if (typeof def.spawnFromAscii === 'function') {
+      try {
+        const e = def.spawnFromAscii(tx, ty, opts, ctx);
+        return e || fallback('spawnFromAscii returned null', 'def.spawnFromAscii');
+      } catch (err) {
+        return fallback(`spawnFromAscii error: ${err?.message || err}`, 'def.spawnFromAscii', err);
+      }
+    }
+
+    if (root.Entities?.[factoryKey]?.spawnFromAscii) {
+      try {
+        const e = root.Entities[factoryKey].spawnFromAscii(tx, ty, opts, ctx);
+        return e || fallback('spawnFromAscii missing', 'Entities.spawnFromAscii');
+      } catch (err) {
+        return fallback(`spawnFromAscii error: ${err?.message || err}`, 'Entities.spawnFromAscii', err);
+      }
+    }
+
     const factory = root.Entities?.factory;
     if (!factory || typeof factory !== 'function') {
-      return PlacementAPI.spawnFallbackPlaceholder(asciiChar, def, tx, ty, `Factory not found: ${factoryKey}`, context);
+      return fallback('factory no encontrada', 'Entities.factory');
     }
     try {
       const entity = factory(factoryKey, opts);
       if (!entity) {
-        return PlacementAPI.spawnFallbackPlaceholder(asciiChar, def, tx, ty, `Factory returned null: ${factoryKey}`, context);
+        return fallback(`Factory returned null: ${factoryKey}`, 'Entities.factory');
       }
       return applyLegendTint(entity);
     } catch (err) {
-      return PlacementAPI.spawnFallbackPlaceholder(asciiChar, def, tx, ty, `Exception: ${err?.message || err}`, context);
+      return fallback(`Entities.factory error: ${err?.message || err}`, 'Entities.factory', err);
     }
   };
 })(typeof window !== 'undefined' ? window : globalThis);

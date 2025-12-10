@@ -2134,6 +2134,41 @@ function drawEntities(c2){
   window.createSpawnDebugPlaceholderEntity =
     window.createSpawnDebugPlaceholderEntity || createSpawnDebugPlaceholderEntity;
 
+  function safeAttachRig(e, rigCfg, source){
+    const PuppetAPI = root.PuppetAPI || root.Puppet || null;
+    if (!PuppetAPI) {
+      e.rigOk = false;
+      try { console.warn('[SPAWN_RIG_WARN] PuppetAPI ausente', { source, kind: e?.kind, role: e?.role }); } catch (_) {}
+      return null;
+    }
+    try {
+      const puppet = PuppetAPI.attach ? PuppetAPI.attach(e, rigCfg) : PuppetAPI.bind?.(e, rigCfg?.rig, rigCfg);
+      e.rigOk = !!puppet;
+      return puppet;
+    } catch (err) {
+      e.rigOk = false;
+      const msg = String((err && err.message) || err);
+      try {
+        console.error('[SPAWN_RIG_ERROR]', { source, kind: e?.kind, role: e?.role, rig: rigCfg && rigCfg.rig, msg });
+      } catch (_) {}
+      try {
+        if (typeof registerSpawnFallback === 'function') {
+          registerSpawnFallback({
+            char: e?._debugChar || null,
+            kind: e?.kind || null,
+            world: e ? { x: e.x, y: e.y } : null,
+            stage: 'PuppetAPI.attach',
+            reason: 'rig_error',
+            error: msg,
+          });
+        }
+      } catch (_) {}
+      return null;
+    }
+  }
+
+  window.safeAttachRig = window.safeAttachRig || safeAttachRig;
+
   // === Post-parse: instanciar placements SOLO UNA VEZ ===
   function finalizeLevelBuildOnce(){
     if (G._placementsFinalized) return;          // evita duplicados
