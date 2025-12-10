@@ -2078,9 +2078,37 @@ function drawEntities(c2){
     return e;
   }
 
-  function createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def) {
+  function getDebugColorForChar(charLabel, def) {
+    try {
+      const map = window.SPAWN_FALLBACK_CHAR_COLORS || {
+        'p': '#ffb74d', 'i': '#4fc3f7', 'b': '#ff8a80', 'g': '#81c784', 'k': '#ba68c8',
+        'm': '#ce93d8', 'r': '#f06292', 'd': '#a1887f', 'U': '#fff176', 'L': '#ffeb3b',
+        'X': '#ff5252'
+      };
+      if (map && Object.prototype.hasOwnProperty.call(map, charLabel)) {
+        return map[charLabel];
+      }
+    } catch (_) {}
+
+    if (def && def.color) return def.color;
+    if (def && def.debugColor) return def.debugColor;
+    if (def && def.tint) return def.tint;
+
+    try {
+      if (def && def.specialRoom && window.AsciiLegend && window.AsciiLegend.TINT_COLORS) {
+        const room = String(def.specialRoom);
+        if (room === 'control') return window.AsciiLegend.TINT_COLORS.blue;
+        if (room === 'boss') return window.AsciiLegend.TINT_COLORS.red;
+        if (room === 'miniboss') return window.AsciiLegend.TINT_COLORS.green;
+      }
+    } catch (_) {}
+
+    return '#ff3366';
+  }
+
+  function createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def, reason) {
     const T = window.TILE_SIZE || 32;
-    const color = (def && def.color) || (def && def.debugColor) || '#ff3366';
+    const color = getDebugColorForChar(charLabel || '?', def || null);
     const e = {
       id: (typeof genId === 'function') ? genId() : ('fallback-' + Math.random().toString(36).slice(2)),
       kind: window.ENT && window.ENT.DEBUG_PLACEHOLDER || 'DEBUG_PLACEHOLDER',
@@ -2090,27 +2118,13 @@ function drawEntities(c2){
       y: worldY,
       w: T,
       h: T,
-      vx: 0,
-      vy: 0,
-      dir: 0,
       solid: false,
-      isFloorTile: true,
-      isTriggerOnly: false,
-      isHazard: false,
       collisionLayer: 'default',
       collisionMask: 'default',
-      health: 1,
-      maxHealth: 1,
-      hearts: 1,
-      maxHearts: 1,
-      touchDamage: 0,
-      touchCooldown: 0,
-      fireImmune: true,
-      dead: false,
       _debugSpawnPlaceholder: true,
-      _debugChar: charLabel,
+      _debugChar: charLabel || '?',
       _debugColor: color,
-      state: 'idle',
+      _debugReason: reason || 'unknown',
       aiUpdate: function () {},
       physicsUpdate: function () {},
       onDamage: function () {},
@@ -2131,8 +2145,67 @@ function drawEntities(c2){
     return e;
   }
 
-  window.createSpawnDebugPlaceholderEntity =
-    window.createSpawnDebugPlaceholderEntity || createSpawnDebugPlaceholderEntity;
+  window.createSpawnDebugPlaceholderEntity = window.createSpawnDebugPlaceholderEntity || createSpawnDebugPlaceholderEntity;
+
+  function safeLogSpawnFallbackError(stage, err, meta) {
+    try {
+      const msg = '[SPAWN_FALLBACK_ERROR] ' + stage;
+      const payload = {
+        message: String((err && err.message) || err),
+        stage,
+        char: meta && meta.charLabel,
+        kind: meta && meta.kind,
+        factoryKey: meta && meta.def && meta.def.factoryKey || null,
+        grid: meta && { x: meta.tx, y: meta.ty },
+        world: meta && { x: meta.worldX, y: meta.worldY }
+      };
+      if (console && typeof console.error === 'function') {
+        console.error(msg, payload);
+      }
+    } catch (_) {}
+  }
+
+  function safeSpawnFallbackPlaceholder(charLabel, def, tx, ty, worldX, worldY, reason, placement) {
+    let entity = null;
+
+    try {
+      if (typeof registerSpawnFallback === 'function') {
+        registerSpawnFallback({
+          char: charLabel,
+          kind: def && (def.kind || def.key) || null,
+          factoryKey: def && def.factoryKey || null,
+          grid: { x: tx, y: ty },
+          world: { x: worldX, y: worldY },
+          reason: reason || 'unknown',
+          placement: placement || null,
+        });
+      }
+    } catch (_) {}
+
+    try {
+      if (window.PlacementAPI && typeof window.PlacementAPI.spawnFallbackPlaceholder === 'function') {
+        entity = window.PlacementAPI.spawnFallbackPlaceholder(charLabel, def, tx, ty, 'finalizeLevelBuildOnce', {
+          x: worldX,
+          y: worldY,
+          reason: reason || 'unknown'
+        });
+      }
+    } catch (err) {
+      entity = null;
+      safeLogSpawnFallbackError('PlacementAPI.spawnFallbackPlaceholder', err, { charLabel, def, tx, ty, worldX, worldY });
+    }
+
+    if (!entity) {
+      try {
+        entity = createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def, reason || 'unknown');
+      } catch (err) {
+        entity = null;
+        safeLogSpawnFallbackError('createSpawnDebugPlaceholderEntity', err, { charLabel, def, tx, ty, worldX, worldY });
+      }
+    }
+
+    return entity;
+  }
 
   function safeAttachRig(e, rigCfg, source){
     const PuppetAPI = root.PuppetAPI || root.Puppet || null;
@@ -2428,38 +2501,35 @@ function drawEntities(c2){
         if (!handled) {
           const charLabel = p.char || ch || '?';
           const kind = def?.kind || def?.key || type || p.type || p.kind || charLabel || '';
+          let spawnFailureReason = null;
 
-          try { console.warn('[SPAWN_FALLBACK]', { char: charLabel, kind, grid: p.grid || { x: tx, y: ty }, world: { x: worldX, y: worldY } }); } catch (_) {}
-          try { if (typeof registerSpawnFallback === 'function') { registerSpawnFallback({ char: charLabel, kind, factoryKey: def?.factoryKey || def?.key || null, grid: p.grid || { x: tx, y: ty }, world: { x: worldX, y: worldY } }); } } catch (err) { try { console.error('[SPAWN_FALLBACK_ERROR] registerSpawnFallback', err); } catch (_) {} }
+          try {
+            console.warn('[SPAWN_FALLBACK]', { char: charLabel, kind, grid: p.grid || { x: tx, y: ty }, world: { x: worldX, y: worldY }, reason: 'enter_fallback' });
+          } catch (_) {}
 
-          // -------------------------------------------------------------------
-          // INTENTO 1: spawnFromAscii(def, ...)
-          // -------------------------------------------------------------------
           if (!entity && spawnFromAscii && def) {
-            try { entity = spawnFromAscii( def, tx, ty, { G, map: G.map, char: charLabel, placement: p, x: worldX, y: worldY }, charLabel ); } catch (err) { entity = null; try { console.error('[SPAWN_FALLBACK_ERROR] spawnFromAscii', { char: charLabel, kind, error: String(err && err.message || err) }); } catch (_) {} }
+            try {
+              entity = spawnFromAscii(def, tx, ty, { G, map: G.map, char: charLabel, placement: p, x: worldX, y: worldY }, charLabel);
+            } catch (err) {
+              entity = null;
+              spawnFailureReason = spawnFailureReason || 'spawnFromAscii_error';
+              safeLogSpawnFallbackError('spawnFromAscii', err, { charLabel, kind, def, tx, ty, worldX, worldY });
+            }
           }
 
-          // -------------------------------------------------------------------
-          // INTENTO 2: Entities.factory(def.factoryKey, ...)
-          // -------------------------------------------------------------------
-          if ( !entity && def?.factoryKey && window.Entities && typeof window.Entities.factory === 'function' ) {
-            try { entity = window.Entities.factory(def.factoryKey, { tx, ty, x: worldX, y: worldY, _ascii: def }); } catch (err) { entity = null; try { console.error('[SPAWN_FALLBACK_ERROR] Entities.factory', { char: charLabel, kind, factoryKey: def.factoryKey, error: String(err && err.message || err) }); } catch (_) {} }
+          if (!entity && def?.factoryKey && window.Entities && typeof window.Entities.factory === 'function') {
+            try {
+              entity = window.Entities.factory(def.factoryKey, { tx, ty, x: worldX, y: worldY, _ascii: def });
+            } catch (err) {
+              entity = null;
+              spawnFailureReason = spawnFailureReason || 'factory_error';
+              safeLogSpawnFallbackError('Entities.factory', err, { charLabel, kind, def, tx, ty, worldX, worldY });
+            }
           }
 
-          // -------------------------------------------------------------------
-          // INTENTO 3: PlacementAPI.spawnFallbackPlaceholder(...)
-          // (debe ser 100% a prueba de errores; lo refuerzas en el paso 3)
-          // -------------------------------------------------------------------
-          if (!entity && window.PlacementAPI && typeof window.PlacementAPI.spawnFallbackPlaceholder === 'function') {
-            try { entity = window.PlacementAPI.spawnFallbackPlaceholder( charLabel, def || null, tx, ty, 'finalizeLevelBuildOnce', { G, map: G.map, char: charLabel, placement: p, x: worldX, y: worldY } ); } catch (err) { entity = null; try { console.error('[SPAWN_FALLBACK_ERROR] spawnFallbackPlaceholder', { char: charLabel, kind, error: String(err && err.message || err) }); } catch (_) {} }
-          }
-
-          // -------------------------------------------------------------------
-          // INTENTO 4 (fallback final interno, garantizado):
-          // crear SIEMPRE un placeholder simple si todo lo demás ha fallado.
-          // -------------------------------------------------------------------
           if (!entity) {
-            try { entity = createSpawnDebugPlaceholderEntity(charLabel, worldX, worldY, def || null); } catch (err) { entity = null; try { console.error('[SPAWN_FALLBACK_ERROR] createSpawnDebugPlaceholderEntity', { char: charLabel, kind, error: String(err && err.message || err) }); } catch (_) {} }
+            spawnFailureReason = spawnFailureReason || 'no_factory_or_unsupported';
+            entity = safeSpawnFallbackPlaceholder(charLabel, def || null, tx, ty, worldX, worldY, spawnFailureReason, p);
           }
 
           if (entity) { handled = true; }

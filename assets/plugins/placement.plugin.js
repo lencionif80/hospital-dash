@@ -29,17 +29,25 @@
     ty,
     source,
     ctx
-  ){
+  ) {
     try {
-      if (root.AsciiLegend && typeof root.AsciiLegend.spawnFallbackPlaceholder === 'function') {
-        return root.AsciiLegend.spawnFallbackPlaceholder(charLabel, def, tx, ty, source, ctx);
-      }
       const T = root.TILE_SIZE || 32;
       const worldX = (ctx && ctx.x) || (tx * T + T * 0.5);
       const worldY = (ctx && ctx.y) || (ty * T + T * 0.5);
-      return createSpawnDebugPlaceholderEntity(charLabel || '?', worldX, worldY, def || null);
+      try {
+        if (root.AsciiLegend && typeof root.AsciiLegend.spawnFallbackPlaceholder === 'function') {
+          const res = root.AsciiLegend.spawnFallbackPlaceholder(charLabel, def, tx, ty, source, ctx);
+          if (res) return res;
+        }
+      } catch (_) {}
+      if (typeof createSpawnDebugPlaceholderEntity === 'function') {
+        return createSpawnDebugPlaceholderEntity(charLabel || '?', worldX, worldY, def || null, (ctx && ctx.reason) || 'unknown');
+      }
+      return null;
     } catch (err) {
-      try { console.error('[SPAWN_FALLBACK_ERROR] PlacementAPI.spawnFallbackPlaceholder fatal', err); } catch (_) {}
+      try {
+        console.error && console.error('[SPAWN_FALLBACK_ERROR] PlacementAPI.spawnFallbackPlaceholder fatal', String((err && err.message) || err));
+      } catch (_) {}
       return null;
     }
   };
