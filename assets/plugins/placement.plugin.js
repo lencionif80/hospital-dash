@@ -889,11 +889,25 @@
     if (entry?.char) return entry.char;
     const key = entry?.key || entry?.kind || entry?.type || defaultKey;
     if (root.PlacementAPI?.getCharForKey) {
-      const fromLegend = root.PlacementAPI.getCharForKey(key, null);
+      const fromLegend = root.PlacementAPI.getCharForKey(key || entry, defaultKey);
       if (fromLegend) return fromLegend;
     }
-    const normalized = String(key || defaultKey || '?');
-    return normalized ? normalized[0] : '?';
+    const normalized = String(defaultKey || '??');
+    return normalized[0] || '?';
+  }
+
+  function logSpawnFallbackPlacement(char, def, tx, ty, world, reason){
+    if (typeof console === 'undefined' || !console.error) return;
+    try {
+      console.error('[SPAWN_FALLBACK]', {
+        char,
+        kind: def?.kind,
+        factoryKey: def?.factoryKey,
+        world: world || null,
+        grid: { tx, ty },
+        reason
+      });
+    } catch (_) {}
   }
 
   // ---------------------------------------------------------------------------
@@ -1646,10 +1660,12 @@
         failReason = err?.message || String(err);
       }
       if (!npc && root.PlacementAPI?.spawnFallbackPlaceholder) {
-        const def = { kind: 'NPC', factoryKey: sub || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'NPC spawn failed', { G, map: cfg?.map, autoRegister: false });
+        const def = { kind: subtype || sub || 'npc', factoryKey: sub || type, type };
+        const reason = failReason || 'NPC spawn failed';
+        logSpawnFallbackPlacement(char, def, tx, ty, { x: world.x, y: world.y }, reason);
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, reason, { G, map: cfg?.map, autoRegister: false, skipLog: true });
         if (fallback) {
-          fallback.group = fallback.group || 'human';
+          fallback.group = fallback.group || 'npc';
           ensureNPCVisuals(fallback);
           placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 10 });
           out.push(fallback);
@@ -1859,20 +1875,22 @@
       } catch (err) {
         failReason = err?.message || String(err);
       }
-      if (!entity && root.PlacementAPI?.spawnFallbackPlaceholder) {
-        const def = { kind: subtype || type, factoryKey: subtype || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'Enemy spawn failed', { G, map: cfg?.map, autoRegister: false });
-        if (fallback) {
-          if (!fallback.group) {
-            if (subtype.includes('furious')) fallback.group = 'human';
-            else fallback.group = 'animal';
+        if (!entity && root.PlacementAPI?.spawnFallbackPlaceholder) {
+          const def = { kind: subtype || type, factoryKey: subtype || type, type };
+          const reason = failReason || 'Enemy spawn failed';
+          logSpawnFallbackPlacement(char, def, tx, ty, { x: world.x, y: world.y }, reason);
+          const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, reason, { G, map: cfg?.map, autoRegister: false, skipLog: true });
+          if (fallback) {
+            if (!fallback.group) {
+              if (subtype.includes('furious')) fallback.group = 'npc';
+              else fallback.group = 'enemy';
+            }
+            ensureNPCVisuals(fallback);
+            placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 10 });
+            out.push(fallback);
           }
-          ensureNPCVisuals(fallback);
-          placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 10 });
-          out.push(fallback);
+          continue;
         }
-        continue;
-      }
       if (entity) {
         entity.rigOk = entity.rigOk === true;
         if (!entity.group) {
@@ -1981,10 +1999,14 @@
       }
       if (!entity && root.PlacementAPI?.spawnFallbackPlaceholder) {
         const def = { kind: entry?.kind || type, factoryKey: entry?.factoryKey || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'World object spawn failed', { G, map: cfg?.map, autoRegister: false });
+        const reason = failReason || (type.startsWith('hazard') ? 'Hazard spawn failed' : 'World object spawn failed');
+        logSpawnFallbackPlacement(char, def, tx, ty, { x: world.x, y: world.y }, reason);
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, reason, { G, map: cfg?.map, autoRegister: false, skipLog: true });
         if (fallback) {
-          fallback.group = fallback.group || 'object';
-          placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 6 });
+          if (!fallback.group) {
+            fallback.group = type.startsWith('hazard') ? 'hazard' : 'object';
+          }
+          placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: type.startsWith('hazard') ? 8 : 6 });
           out.push(fallback);
         }
         continue;
