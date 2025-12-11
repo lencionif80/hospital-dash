@@ -15,6 +15,26 @@
   const VIEW_H = 540;
   const FORCE_PLAYER = 40.0;
 
+  (function initAllEntitiesFlag() {
+    let allEntitiesOff = false;
+    try {
+      const search = String(window.location.search || '');
+      if (search) {
+        const params = new URLSearchParams(search);
+        const raw = params.get('AllEntities') || params.get('allEntities') || params.get('allentities');
+        if (raw != null) {
+          const v = String(raw).toLowerCase();
+          if (v === 'off') {
+            allEntitiesOff = true;
+          }
+        }
+      }
+    } catch (_) {
+      allEntitiesOff = false;
+    }
+    window.__ALL_ENTITIES_OFF__ = allEntitiesOff;
+  })();
+
   const ENT = {
     PLAYER: 1,
     PATIENT: 2,

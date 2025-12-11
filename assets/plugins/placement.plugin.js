@@ -8,6 +8,14 @@
   const Placement = root.Placement = root.Placement || {};
   Placement._counts = null;
 
+  function isAllEntitiesOff() {
+    try {
+      return !!window.__ALL_ENTITIES_OFF__;
+    } catch (_) {
+      return false;
+    }
+  }
+
   const TILE_SIZE = () => root.TILE_SIZE || root.TILE || 32;
 
   const GridMath = root.GridMath = root.GridMath || {};
@@ -1629,14 +1637,14 @@
     const tile = TILE_SIZE();
     const world = toWorld(tx, ty);
     const spawnOpts = { ...(opts || {}), autoBell: false };
-    if (root && root.__ALL_ENTITIES_OFF__) {
+    if (isAllEntitiesOff()) {
       const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
         (opts && opts.char) || 'p',
         { kind: 'patient', factoryKey: spawnOpts?.factoryKey || 'patient', type: 'patient' },
         tx,
         ty,
-        'AllEntities=off: patient spawn disabled',
-        { G, map: cfg?.map }
+        'AllEntities=off (patient placement)',
+        { G, map: cfg?.map, autoRegister: true }
       );
       if (fallback) {
         fallback.group = fallback.group || 'human';
@@ -1674,14 +1682,14 @@
     const tile = TILE_SIZE();
     const world = toWorld(tx, ty);
     const payload = { ...opts, patientId: opts?.patientId, _units: 'px' };
-    if (root && root.__ALL_ENTITIES_OFF__) {
+    if (isAllEntitiesOff()) {
       const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
         (opts && opts.char) || 'i',
         { kind: 'pill', factoryKey: 'pill_generic', type: 'pill' },
         tx,
         ty,
-        'AllEntities=off: pill spawn disabled',
-        { G, map: cfg?.map }
+        'AllEntities=off (pill placement)',
+        { G, map: cfg?.map, autoRegister: true }
       );
       if (fallback) {
         fallback.group = fallback.group || 'object';
@@ -1709,14 +1717,14 @@
     const tile = TILE_SIZE();
     const world = toWorld(tx, ty);
     const payload = { ...opts, _units: 'px' };
-    if (root && root.__ALL_ENTITIES_OFF__) {
+    if (isAllEntitiesOff()) {
       const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
         (opts && opts.char) || 'b',
         { kind: 'bell', factoryKey: 'bell_patient', type: 'bell' },
         tx,
         ty,
-        'AllEntities=off: bell spawn disabled',
-        { G, map: cfg?.map }
+        'AllEntities=off (bell placement)',
+        { G, map: cfg?.map, autoRegister: true }
       );
       if (fallback) {
         fallback.group = fallback.group || 'object';
@@ -1746,7 +1754,7 @@
 
   function spawnBellForPatient(patient, txHint, tyHint, cfg, G){
     if (!patient) return null;
-    if (!root.__ALL_ENTITIES_OFF__ && root.BellsAPI?.spawnPatientBell) {
+    if (!isAllEntitiesOff() && root.BellsAPI?.spawnPatientBell) {
       const bell = (Number.isInteger(txHint) && Number.isInteger(tyHint))
         ? root.BellsAPI.spawnPatientBell(patient, txHint, tyHint)
         : root.BellsAPI.spawnPatientBell(patient);
@@ -1803,15 +1811,15 @@
       let failReason = '';
       const payload = { ...entry, _units: 'px' };
       let npc = null;
-      if (root && root.__ALL_ENTITIES_OFF__) {
+      if (isAllEntitiesOff()) {
         const def = { kind: 'NPC', factoryKey: sub || type, type };
         const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
           char,
           def,
           tx,
           ty,
-          'AllEntities=off: NPC spawn disabled',
-          { G, map: cfg?.map }
+          'AllEntities=off (NPC placement)',
+          { G, map: cfg?.map, autoRegister: true }
         );
         if (fallback) {
           fallback.group = fallback.group || 'human';
@@ -2034,18 +2042,19 @@
       const char = fallbackCharForPlacement(entry, subtype || type);
       let failReason = '';
       let entity = null;
-      if (root && root.__ALL_ENTITIES_OFF__) {
+      if (isAllEntitiesOff()) {
         const def = { kind: subtype || type, factoryKey: subtype || type, type };
         const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
           char,
           def,
           tx,
           ty,
-          'AllEntities=off: enemy spawn disabled',
-          { G, map: cfg?.map }
+          'AllEntities=off (enemy placement)',
+          { G, map: cfg?.map, autoRegister: true }
         );
         if (fallback) {
           fallback.group = fallback.group || (subtype.includes('furious') ? 'human' : 'animal');
+          ensureNPCVisuals?.(fallback);
           placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 10 });
           out.push(fallback);
         }
@@ -2126,18 +2135,35 @@
       const char = fallbackCharForPlacement(entry, type);
       let failReason = '';
       let entity = null;
-      if (root && root.__ALL_ENTITIES_OFF__) {
+      if (isAllEntitiesOff()) {
         const def = { kind: entry?.kind || type, factoryKey: entry?.factoryKey || type, type };
+        const reason =
+          type === 'cart'
+            ? 'AllEntities=off (cart placement)'
+            : (type === 'door' || type === 'boss_door')
+              ? 'AllEntities=off (door placement)'
+              : type === 'elevator'
+                ? 'AllEntities=off (elevator placement)'
+                : (type === 'light' || type === 'boss_light')
+                  ? 'AllEntities=off (light placement)'
+                  : type === 'phone'
+                    ? 'AllEntities=off (phone placement)'
+                    : type === 'bell'
+                      ? 'AllEntities=off (bell placement)'
+                      : (type === 'hazard_wet' || type === 'hazard_fire')
+                        ? 'AllEntities=off (hazard placement)'
+                        : 'AllEntities=off (world object placement)';
         const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
           char,
           def,
           tx,
           ty,
-          'AllEntities=off: world object spawn disabled',
-          { G, map: cfg?.map }
+          reason,
+          { G, map: cfg?.map, autoRegister: true }
         );
         if (fallback) {
           fallback.group = fallback.group || (type.startsWith('hazard') ? 'hazard' : 'object');
+          ensureNPCVisuals?.(fallback);
           placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 6 });
           out.push(fallback);
         }

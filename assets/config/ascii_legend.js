@@ -332,25 +332,6 @@
       ? PlacementAPI.getDefFromChar(defOrChar, { context: 'PlacementAPI.spawnFromAscii' })
       : defOrChar;
     const asciiChar = char || extraCtx?.char || def?.char || (typeof defOrChar === 'string' ? defOrChar : null);
-
-    const globalRoot = typeof window !== 'undefined' ? window : globalThis;
-
-    // ---------- MODO DEBUG: AllEntities=off ----------
-    if (globalRoot && globalRoot.__ALL_ENTITIES_OFF__) {
-      return PlacementAPI.spawnFallbackPlaceholder(
-        asciiChar,
-        def || null,
-        tx,
-        ty,
-        'AllEntities=off: ASCII spawn disabled',
-        {
-          ...(extraCtx || {}),
-          autoRegister: true,
-          G: extraCtx?.G || globalRoot.G || null,
-          map: extraCtx?.map || null
-        }
-      );
-    }
     if (!def || typeof tx !== 'number' || typeof ty !== 'number') {
       return PlacementAPI.spawnFallbackPlaceholder(
         asciiChar,
@@ -362,8 +343,27 @@
       );
     }
 
-    const world = gridToWorld(tx, ty);
     const ctx = extraCtx || {};
+    const kind = def.kind || def.key;
+    const isFloorLike = kind === 'floor' || kind === 'floor_control' || kind === 'floor_boss' || kind === 'floor_miniboss' || kind === 'wall' || kind === 'void';
+
+    const allOff = !!window.__ALL_ENTITIES_OFF__;
+    if (allOff && !isFloorLike) {
+      return PlacementAPI.spawnFallbackPlaceholder(
+        asciiChar,
+        def,
+        tx,
+        ty,
+        'AllEntities=off (spawnFromAscii)',
+        {
+          G: ctx?.G,
+          map: ctx?.map,
+          autoRegister: true
+        }
+      );
+    }
+
+    const world = gridToWorld(tx, ty);
     try {
       console.log('[SPAWN_ASCII]', {
         char: asciiChar,
@@ -373,7 +373,6 @@
       });
     } catch (_) {}
 
-    const kind = def.kind || def.key;
     const factoryKey = def.factoryKey || kind;
     const opts = { _ascii: def, tx, ty, context: ctx, char: asciiChar };
     const applyLegendTint = (entity) => {
