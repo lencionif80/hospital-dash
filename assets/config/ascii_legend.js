@@ -332,6 +332,25 @@
       ? PlacementAPI.getDefFromChar(defOrChar, { context: 'PlacementAPI.spawnFromAscii' })
       : defOrChar;
     const asciiChar = char || extraCtx?.char || def?.char || (typeof defOrChar === 'string' ? defOrChar : null);
+
+    const globalRoot = typeof window !== 'undefined' ? window : globalThis;
+
+    // ---------- MODO DEBUG: AllEntities=off ----------
+    if (globalRoot && globalRoot.__ALL_ENTITIES_OFF__) {
+      return PlacementAPI.spawnFallbackPlaceholder(
+        asciiChar,
+        def || null,
+        tx,
+        ty,
+        'AllEntities=off: ASCII spawn disabled',
+        {
+          ...(extraCtx || {}),
+          autoRegister: true,
+          G: extraCtx?.G || globalRoot.G || null,
+          map: extraCtx?.map || null
+        }
+      );
+    }
     if (!def || typeof tx !== 'number' || typeof ty !== 'number') {
       return PlacementAPI.spawnFallbackPlaceholder(
         asciiChar,
