@@ -527,6 +527,28 @@ document.addEventListener('keydown', (e)=>{
     "##############################",
     ];
     // --- Flags globales de modo mapa ---
+    (function configureDebugFlagsFromUrl(root) {
+      try {
+        root = root || (typeof window !== 'undefined' ? window : globalThis);
+        const search = root.location && root.location.search;
+        if (!search) return;
+
+        const params = {};
+        search.replace(/^\?/, '').split('&').forEach(pair => {
+          if (!pair) return;
+          const [k, v] = pair.split('=');
+          params[decodeURIComponent(k)] = v != null ? decodeURIComponent(v) : '';
+        });
+
+        const raw = (params.AllEntities || params.allEntities || '').toLowerCase();
+        const allOff = raw === 'off' || raw === '0' || raw === 'false';
+
+        if (allOff) {
+          root.__ALL_ENTITIES_OFF__ = true;
+        }
+      } catch (_) {}
+    })(typeof window !== 'undefined' ? window : globalThis);
+
     const __qs = new URLSearchParams(location.search);
     const MAP_MODE = (__qs.get('map') || '').toLowerCase();
     window.__MAP_MODE = MAP_MODE;                 // para compatibilidad con código viejo

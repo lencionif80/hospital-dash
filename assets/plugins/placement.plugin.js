@@ -1629,6 +1629,25 @@
     const tile = TILE_SIZE();
     const world = toWorld(tx, ty);
     const spawnOpts = { ...(opts || {}), autoBell: false };
+    if (root && root.__ALL_ENTITIES_OFF__) {
+      const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
+        (opts && opts.char) || 'p',
+        { kind: 'patient', factoryKey: spawnOpts?.factoryKey || 'patient', type: 'patient' },
+        tx,
+        ty,
+        'AllEntities=off: patient spawn disabled',
+        { G, map: cfg?.map }
+      );
+      if (fallback) {
+        fallback.group = fallback.group || 'human';
+        ensurePatientCounters(G);
+        if (Array.isArray(G?.patients) && !G.patients.includes(fallback)) {
+          G.patients.push(fallback);
+        }
+        placeEntitySafely(fallback, G, tx, ty, { char: (opts && opts.char) || 'p', maxRadius: 10 });
+      }
+      return fallback;
+    }
     const patient = root.Entities?.Patient?.spawn?.(world.x, world.y, spawnOpts)
       || root.PatientsAPI?.createPatient?.(world.x, world.y, spawnOpts)
       || {
@@ -1655,6 +1674,21 @@
     const tile = TILE_SIZE();
     const world = toWorld(tx, ty);
     const payload = { ...opts, patientId: opts?.patientId, _units: 'px' };
+    if (root && root.__ALL_ENTITIES_OFF__) {
+      const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
+        (opts && opts.char) || 'i',
+        { kind: 'pill', factoryKey: 'pill_generic', type: 'pill' },
+        tx,
+        ty,
+        'AllEntities=off: pill spawn disabled',
+        { G, map: cfg?.map }
+      );
+      if (fallback) {
+        fallback.group = fallback.group || 'object';
+        placeEntitySafely(fallback, G, tx, ty, { char: (opts && opts.char) || 'i', maxRadius: 8 });
+      }
+      return fallback;
+    }
     const pill = root.Entities?.Objects?.spawnPill?.('pill', world.x + tile * 0.25, world.y + tile * 0.25, payload)
       || root.PatientsAPI?.createPillForPatient?.(findPatientById(G, opts?.patientId), 'near')
       || {
@@ -1675,6 +1709,21 @@
     const tile = TILE_SIZE();
     const world = toWorld(tx, ty);
     const payload = { ...opts, _units: 'px' };
+    if (root && root.__ALL_ENTITIES_OFF__) {
+      const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
+        (opts && opts.char) || 'b',
+        { kind: 'bell', factoryKey: 'bell_patient', type: 'bell' },
+        tx,
+        ty,
+        'AllEntities=off: bell spawn disabled',
+        { G, map: cfg?.map }
+      );
+      if (fallback) {
+        fallback.group = fallback.group || 'object';
+        placeEntitySafely(fallback, G, tx, ty, { char: (opts && opts.char) || 'b', maxRadius: 6 });
+      }
+      return fallback;
+    }
     const bell = root.BellsAPI?.spawnBell?.(world.x + tile * 0.1, world.y + tile * 0.1, payload)
       || root.spawnBell?.(world.x + tile * 0.1, world.y + tile * 0.1, payload)
       || {
@@ -1697,7 +1746,7 @@
 
   function spawnBellForPatient(patient, txHint, tyHint, cfg, G){
     if (!patient) return null;
-    if (root.BellsAPI?.spawnPatientBell) {
+    if (!root.__ALL_ENTITIES_OFF__ && root.BellsAPI?.spawnPatientBell) {
       const bell = (Number.isInteger(txHint) && Number.isInteger(tyHint))
         ? root.BellsAPI.spawnPatientBell(patient, txHint, tyHint)
         : root.BellsAPI.spawnPatientBell(patient);
@@ -1754,6 +1803,24 @@
       let failReason = '';
       const payload = { ...entry, _units: 'px' };
       let npc = null;
+      if (root && root.__ALL_ENTITIES_OFF__) {
+        const def = { kind: 'NPC', factoryKey: sub || type, type };
+        const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
+          char,
+          def,
+          tx,
+          ty,
+          'AllEntities=off: NPC spawn disabled',
+          { G, map: cfg?.map }
+        );
+        if (fallback) {
+          fallback.group = fallback.group || 'human';
+          ensureNPCVisuals(fallback);
+          placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 10 });
+          out.push(fallback);
+        }
+        continue;
+      }
       try {
         if (root.Entities?.NPC?.spawn) {
           npc = root.Entities.NPC.spawn(sub, world.x, world.y, payload);
@@ -1967,6 +2034,23 @@
       const char = fallbackCharForPlacement(entry, subtype || type);
       let failReason = '';
       let entity = null;
+      if (root && root.__ALL_ENTITIES_OFF__) {
+        const def = { kind: subtype || type, factoryKey: subtype || type, type };
+        const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
+          char,
+          def,
+          tx,
+          ty,
+          'AllEntities=off: enemy spawn disabled',
+          { G, map: cfg?.map }
+        );
+        if (fallback) {
+          fallback.group = fallback.group || (subtype.includes('furious') ? 'human' : 'animal');
+          placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 10 });
+          out.push(fallback);
+        }
+        continue;
+      }
       try {
         if (type === 'enemy' || type === 'spawner') {
           if (subtype.includes('mosquito') && root.MosquitoAPI?.spawn) {
@@ -2042,6 +2126,23 @@
       const char = fallbackCharForPlacement(entry, type);
       let failReason = '';
       let entity = null;
+      if (root && root.__ALL_ENTITIES_OFF__) {
+        const def = { kind: entry?.kind || type, factoryKey: entry?.factoryKey || type, type };
+        const fallback = root.PlacementAPI?.spawnFallbackPlaceholder?.(
+          char,
+          def,
+          tx,
+          ty,
+          'AllEntities=off: world object spawn disabled',
+          { G, map: cfg?.map }
+        );
+        if (fallback) {
+          fallback.group = fallback.group || (type.startsWith('hazard') ? 'hazard' : 'object');
+          placeEntitySafely(fallback, G, tx, ty, { char, maxRadius: 6 });
+          out.push(fallback);
+        }
+        continue;
+      }
       try {
         if (type === 'cart' && root.Entities?.Cart?.spawn) {
           const sub = String(entry?.sub || '').toLowerCase();
