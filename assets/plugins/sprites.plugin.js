@@ -235,8 +235,9 @@
       }
     },
 
-    drawEntity(ctx, e) {
-      if (!e || e.dead) return;
+      drawEntity(ctx, e) {
+        if (!e || e.dead) return;
+        if (e._culled || (!e.rigOk && !e.placeholder)) return;
 
       if (e && e._debugSpawnPlaceholder) {
         const G = global.G || null;
