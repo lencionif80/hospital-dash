@@ -1767,7 +1767,14 @@
       if (!npc && !failReason) failReason = 'NPC spawn returned null';
       if (!npc && root.PlacementAPI?.spawnFallbackPlaceholder) {
         const def = { kind: 'NPC', factoryKey: sub || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'NPC spawn failed', { G, map: cfg?.map, autoRegister: false });
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(
+          char,
+          def,
+          tx,
+          ty,
+          failReason || 'NPC spawn failed',
+          { G, map: cfg?.map }
+        );
         if (fallback) {
           fallback.group = fallback.group || 'human';
           ensureNPCVisuals(fallback);
@@ -1982,7 +1989,14 @@
       if (!entity && !failReason) failReason = 'Enemy spawn returned null';
       if (!entity && root.PlacementAPI?.spawnFallbackPlaceholder) {
         const def = { kind: subtype || type, factoryKey: subtype || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'Enemy spawn failed', { G, map: cfg?.map, autoRegister: false });
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(
+          char,
+          def,
+          tx,
+          ty,
+          failReason || 'Enemy spawn failed',
+          { G, map: cfg?.map }
+        );
         if (fallback) {
           if (!fallback.group) {
             if (subtype.includes('furious')) fallback.group = 'human';
@@ -2080,7 +2094,14 @@
       if (!entity && !failReason) failReason = 'World object spawn returned null';
       if (!entity && root.PlacementAPI?.spawnFallbackPlaceholder) {
         const def = { kind: entry?.kind || type, factoryKey: entry?.factoryKey || type, type };
-        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(char, def, tx, ty, failReason || 'World object spawn failed', { G, map: cfg?.map, autoRegister: false });
+        const fallback = root.PlacementAPI.spawnFallbackPlaceholder(
+          char,
+          def,
+          tx,
+          ty,
+          failReason || 'World object spawn failed',
+          { G, map: cfg?.map }
+        );
         if (fallback) {
           if (!fallback.group) {
             fallback.group = type.startsWith('hazard') ? 'hazard' : 'object';

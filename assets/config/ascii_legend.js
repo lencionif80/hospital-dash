@@ -3,6 +3,15 @@
 
   const root = typeof W !== 'undefined' ? W : window;
 
+  function pickTextColorForBackground(bg) {
+    if (!/^#[0-9a-f]{6}$/i.test(bg)) return '#ffffff';
+    const r = parseInt(bg.substr(1, 2), 16);
+    const g = parseInt(bg.substr(3, 2), 16);
+    const b = parseInt(bg.substr(5, 2), 16);
+    const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+    return lum > 140 ? '#111111' : '#f8f8f8';
+  }
+
   // Tabla ASCII centralizada y única. Los caracteres oficiales son:
   //   Terreno: '#' muro, '.' suelo, '-' control, ';' boss, ',' miniboss, ' ' vacío
   //   Spawns:  'S' héroe, 'X' boss, 'M' miniboss
@@ -204,44 +213,19 @@
     '?': '#ff3366'
   };
 
-  function resolvePlaceholderColor(ch, def, reason){
-    if (def?.placeholderColor) return def.placeholderColor;
-    if (def?.debugColor) return def.debugColor;
-
-    const meta = def || {};
-    const kind = String(meta.kind || meta.factoryKey || '').toLowerCase();
-    const role = String(meta.role || '').toLowerCase();
-    const special = String(meta.specialRoom || '').toLowerCase();
-    const has = (needle) => kind.includes(needle) || role.includes(needle);
-
-    if (has('hero') || meta.isHero) return '#6bd3ff';
-    if (meta.isSpawn) return '#4da6ff';
-    if (meta.isPatient || has('patient') || has('bed') || has('bell')) return '#ffd166';
-    if (meta.isDoor || has('door')) return '#7f8c8d';
-    if (meta.isCart || has('cart')) return '#b0956c';
-    if (meta.isEnemy || has('enemy') || has('hostile')) return '#ff77aa';
-    if (has('rat')) return '#c7c7c7';
-    if (meta.isNPC || has('npc') || has('staff')) return '#ff9800';
-    if (meta.isHazard || has('fire')) return '#ffeb3b';
-    if (meta.isWater || has('water') || has('wet')) return '#2196f3';
-    if (meta.isDoor || meta.bossDoor || has('boss')) return '#111111';
-    if (has('light')) return '#f1c40f';
-    if (has('elevator')) return '#9b59b6';
-    if (has('pill') || has('syringe') || has('drip') || has('food') || has('loot')) return '#a0ffcf';
-    if (special) return '#90a4ae';
-    const colorByChar = PLACEHOLDER_DEBUG_COLORS[ch] || null;
-    if (colorByChar) return colorByChar;
-    return PLACEHOLDER_DEBUG_COLORS['?'];
-  }
-
-  function pickTextColorForBackground(bg) {
-    // bg viene como '#rrggbb' o similar
-    if (typeof bg !== 'string' || !/^#([0-9a-f]{6})$/i.test(bg)) return '#ffffff';
-    const r = parseInt(bg.slice(1, 3), 16);
-    const g = parseInt(bg.slice(3, 5), 16);
-    const b = parseInt(bg.slice(5, 7), 16);
-    const luminance = 0.299 * r + 0.587 * g + 0.114 * b; // fórmula sencilla
-    return luminance > 140 ? '#111111' : '#f8f8f8'; // negro sobre claro, blanco sobre oscuro
+  function resolvePlaceholderColor(def){
+    if (!def) return '#ff3366';
+    const k = (def.kind || def.type || def.factoryKey || '').toLowerCase();
+    if (k.includes('npc')) return '#ff9800';
+    if (k.includes('enemy') || k.includes('boss')) return '#e53935';
+    if (k.includes('door')) return '#6d4c41';
+    if (k.includes('cart')) return '#9e9e9e';
+    if (k.includes('light')) return '#f5f5f5';
+    if (k.includes('elevator')) return '#7b1fa2';
+    if (k.includes('phone')) return '#1565c0';
+    if (k.includes('fire')) return '#ffeb3b';
+    if (k.includes('water')) return '#2196f3';
+    return '#ff3366';
   }
 
   function ensurePlaceholderSprite(key, char, color){
@@ -259,7 +243,7 @@
       ctx.strokeStyle = 'rgba(0,0,0,0.5)';
       ctx.lineWidth = 2;
       ctx.strokeRect(1, 1, tile - 2, tile - 2);
-      const textColor = pickTextColorForBackground(color || '#ff00ff');
+      const textColor = pickTextColorForBackground(color);
       ctx.fillStyle = textColor;
       ctx.font = `${Math.floor(tile * 0.7)}px monospace`;
       ctx.textAlign = 'center';
@@ -289,16 +273,17 @@
     context = {}
   ) {
     try {
-      const game = context.G || root.G || {};
-      const map = context.map || game.map || null;
-      ensureFloorAt(map || game, tx, ty);
-      const tile = root.TILE_SIZE || root.TILE || 32;
-      const ascii = asciiChar || context.char || def?.char || '?';
-      const color = resolvePlaceholderColor(ascii, def || null, failReason);
-      const spriteKey = ensurePlaceholderSprite('spawn_placeholder', ascii, color);
-      const placeholder = {
-        kind: def?.kind || def?.key || 'PLACEHOLDER',
-        type: def?.type,
+        const game = context.G || root.G || {};
+        const G = game;
+        const map = context.map || game.map || null;
+        ensureFloorAt(map || game, tx, ty);
+        const tile = root.TILE_SIZE || root.TILE || 32;
+        const ascii = asciiChar || context.char || def?.char || '?';
+        const color = resolvePlaceholderColor(def || null);
+        const spriteKey = ensurePlaceholderSprite('spawn_placeholder', ascii, color);
+        const placeholder = {
+          kind: def?.kind || def?.key || 'PLACEHOLDER',
+          type: def?.type,
         factoryKey: def?.factoryKey,
         x: tx * tile,
         y: ty * tile,
@@ -310,29 +295,30 @@
         char: ascii,
         color,
         spriteKey,
-        placeholder: true,
-        rigOk: false,
-      };
+          placeholder: true,
+          rigOk: false,
+        };
 
-      const shouldRegister = context.autoRegister !== false;
-      if (shouldRegister && Array.isArray(game.entities) && !game.entities.includes(placeholder)) {
-        game.entities.push(placeholder);
-      }
+        // 🔧 Registrar SIEMPRE el placeholder
+        if (G && Array.isArray(G.entities) && !G.entities.includes(placeholder)) {
+          G.entities.push(placeholder);
+        }
 
-      try {
-        if (typeof console !== 'undefined' && console.error) {
-          console.error('[SPAWN_FALLBACK]', {
-            char: ascii,
-            kind: def?.kind,
-            factoryKey: def?.factoryKey,
+        try {
+          if (typeof console !== 'undefined' && console.log) {
+            console.log('[SPAWN_FALLBACK]', {
+              char: ascii,
+              kind: def?.kind,
+              factoryKey: def?.factoryKey,
             x: placeholder.x,
             y: placeholder.y,
             reason: failReason || null,
-          });
-        }
-      } catch (_) {}
+            });
+          }
+        } catch (_) {}
 
-      return placeholder;
+        placeholder.spriteKey = spriteKey || ensurePlaceholderSprite('fallback_default', asciiChar || '?', color || '#ff3366');
+        return placeholder;
     } catch (err) {
       try { console.error('[SPAWN_FALLBACK_FATAL]', err); } catch (_) {}
       return null;
